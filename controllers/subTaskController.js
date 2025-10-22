@@ -3,7 +3,9 @@ import Task from "../models/Task.js";
 
 export async function getSubTask(req, res) {
   try {
-    const data = await Subtask.find().populate("task", "nama");
+    const data = await Subtask.find()
+      .populate("task", "nama")
+      .sort({ position: 1 });
     res.status(200).json(data);
   } catch (error) {
     console.error("get subtask error:", error);
@@ -19,9 +21,12 @@ export async function createSubTask(req, res) {
         .status(404)
         .json({ success: false, message: "Task not found" });
     }
+
+    const count = await Subtask.countDocuments({ task: taskId });
     const subtask = await Subtask.create({
       ...req.body,
       task: taskId,
+      position: count,
     });
     await Task.findByIdAndUpdate(taskId, {
       $push: { subtask: subtask._id },
@@ -88,5 +93,29 @@ export async function deleteSubTask(req, res) {
     });
   } catch (error) {
     console.error("Delete subtask Error:", error);
+  }
+}
+
+export async function positionSubTask(req, res) {
+  try {
+    const { taskId } = req.params;
+    const { subTaskId } = req.body;
+
+    if (!Array.isArray(subTaskId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "subTaskId must be an array" });
+    }
+    await Promise.all(
+      subTaskId.map((id, position) =>
+        Subtask.findByIdAndUpdate(id, { position, task: taskId })
+      )
+    );
+    res.status(200).json({
+      success: true,
+      message: "Subtask positions updated successfully",
+    });
+  } catch (error) {
+    console.error("Position Subtask Error:", error);
   }
 }
