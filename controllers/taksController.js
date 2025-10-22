@@ -1,5 +1,6 @@
 import Task from "../models/Task.js";
 import Group from "../models/Group.js";
+import Subtask from "../models/Subtask.js";
 
 export async function getTask(req, res) {
   try {
@@ -38,77 +39,6 @@ export async function createTask(req, res) {
   }
 }
 
-// export async function updateProject(req, res) {
-//   try {
-//     const { projectId } = req.params;
-//     const { workspaceId, ...updateData } = req.body;
-
-//     const oldProject = await Project.findById(projectId);
-
-//     if (!oldProject) {
-//       return res
-//         .status(404)
-//         .json({ success: false, message: "Project not found" });
-//     }
-
-//     if (workspaceId && workspaceId !== String(oldProject.workspace)) {
-//       await Workspace.findByIdAndUpdate(oldProject.workspace, {
-//         $pull: { projects: oldProject._id },
-//       });
-
-//       await Workspace.findByIdAndUpdate(workspaceId, {
-//         $push: { projects: oldProject._id },
-//       });
-//     }
-
-//     updateData.workspace = workspaceId || oldProject.workspace;
-//     const updatedProject = await Project.findByIdAndUpdate(
-//       projectId,
-//       updateData,
-//       {
-//         new: true,
-//       }
-//     );
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Project updated successfully",
-//       data: updatedProject,
-//     });
-//   } catch (error) {
-//     console.log("Update Project Error:", error);
-//   }
-// }
-
-// export async function deleteProject(req, res) {
-//   try {
-//     const { projectId } = req.params;
-//     const projectRef = await Project.findById(projectId).select("workspace");
-
-//     if (!projectRef) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Project tidak ditemukan",
-//       });
-//     }
-
-//     await Group.deleteMany({ project: projectId });
-
-//     await Workspace.findByIdAndUpdate(projectRef.workspace, {
-//       $pull: { projects: projectId },
-//     });
-
-//     await Project.findByIdAndDelete(projectId);
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Project dan semua group terkait berhasil dihapus",
-//     });
-//   } catch (error) {
-//     console.error("Delete Project Error:", error);
-//   }
-// }
-
 export async function updateTask(req, res) {
   try {
     const { taskId } = req.params;
@@ -143,5 +73,29 @@ export async function updateTask(req, res) {
     });
   } catch (error) {
     console.error("Update Task Error:", error);
+  }
+}
+
+export async function deleteTask(req, res) {
+  try {
+    const { taskId } = req.params;
+    const task = await Task.findByIdAndDelete(taskId);
+
+    if (!task) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Task not found" });
+    }
+
+    await Subtask.deleteMany({ task: taskId });
+    await Group.findByIdAndUpdate(task.groups, {
+      $pull: { task: task._id },
+    });
+    res.status(200).json({
+      success: true,
+      message: "Task deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete Task Error:", error);
   }
 }
