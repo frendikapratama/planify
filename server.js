@@ -6,6 +6,7 @@ import workspaceRoutes from "./routes/workspaceRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
 import taskRoutes from "./routes/taskRoutes.js";
+import subTaskRoutes from "./routes/subTaskRoutes.js";
 
 dotenv.config({ debug: true, override: true });
 
@@ -19,8 +20,9 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/project", projectRoutes);
-app.use("/api/task", taskRoutes);
 app.use("/api/group", groupRoutes);
+app.use("/api/task", taskRoutes);
+app.use("/api/subTask", subTaskRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({
