@@ -5,9 +5,31 @@ import Group from "../models/Group.js";
 export async function getWorkspace(req, res) {
   try {
     const data = await Workspaces.find().populate("projects", "nama");
-    res.status(200).json(data);
+    res.status(200).json({
+      success: true,
+      message: "workspace berhasil dibuat",
+      data,
+    });
   } catch (error) {
     console.error("Create Workspace Error:", error);
+  }
+}
+
+export async function getWorkspaceById(req, res) {
+  try {
+    const { workspaceId } = req.params;
+    const workspace = await Workspaces.findById(workspaceId).populate({
+      path: "projects",
+      select: "nama createdAt",
+      options: { sort: { createdAt: -1 } },
+    });
+    res.status(200).json({
+      success: true,
+      message: "workspace berhasil dibuat",
+      data: workspace,
+    });
+  } catch (error) {
+    console.error("Get Workspace By ID Error:", error);
   }
 }
 

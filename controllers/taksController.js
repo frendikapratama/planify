@@ -99,3 +99,21 @@ export async function deleteTask(req, res) {
     console.error("Delete Task Error:", error);
   }
 }
+
+export const getTasksByGroup = async (req, res) => {
+  try {
+    const { groups } = req.query;
+    if (!groups) {
+      return res.status(400).json({ message: "groupId wajib disertakan" });
+    }
+    const tasks = await Task.find({ groups }).populate("subtask");
+    res.status(200).json({
+      success: true,
+      message: "berhasil mengambil data",
+      data: tasks,
+    });
+  } catch (error) {
+    console.error("Error getTasksByGroup:", error);
+    res.status(500).json({ message: "Gagal memuat task" });
+  }
+};

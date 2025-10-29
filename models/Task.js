@@ -4,6 +4,7 @@ const taskSchema = new mongoose.Schema(
   {
     nama: { type: String },
     description: String,
+    status: { type: String },
     groups: [{ type: mongoose.Schema.Types.ObjectId, ref: "Group" }],
     subtask: [{ type: mongoose.Schema.Types.ObjectId, ref: "Subtask" }],
   },

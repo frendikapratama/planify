@@ -119,3 +119,23 @@ export async function positionSubTask(req, res) {
     console.error("Position Subtask Error:", error);
   }
 }
+
+export async function getByTask(req, res) {
+  try {
+    const { task } = req.query;
+    if (!task) {
+      return res.status(400).json({
+        message: "task wajib di setakan",
+      });
+    }
+    const data = await Subtask.find({ task });
+
+    res.status(200).json({
+      success: true,
+      message: "berhasil mengambil data",
+      data,
+    });
+  } catch (error) {
+    console.log("gagal mengambil", error);
+  }
+}

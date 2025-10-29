@@ -7,7 +7,11 @@ export async function getProject(req, res) {
     const data = await Project.find()
       .populate("workspace", "nama")
       .populate("groups", "nama");
-    res.status(200).json(data);
+    res.status(200).json({
+      success: true,
+      message: "berhasil mengambil data",
+      data,
+    });
   } catch (error) {
     console.error("Create Workspace Error:", error);
   }
@@ -109,5 +113,23 @@ export async function deleteProject(req, res) {
     });
   } catch (error) {
     console.error("Delete Project Error:", error);
+  }
+}
+
+export async function getProjectById(req, res) {
+  try {
+    const { projectId } = req.params;
+
+    const project = await Project.findById(projectId).populate(
+      "groups",
+      "nama"
+    );
+    res.status(200).json({
+      success: true,
+      message: "berhasil mengambil data",
+      data: project,
+    });
+  } catch (error) {
+    console.log("gagal get by id ", error);
   }
 }
