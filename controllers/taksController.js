@@ -106,7 +106,10 @@ export const getTasksByGroup = async (req, res) => {
     if (!groups) {
       return res.status(400).json({ message: "groupId wajib disertakan" });
     }
-    const tasks = await Task.find({ groups }).populate("subtask");
+    const tasks = await Task.find({ groups }).populate({
+      path: "subtask",
+      options: { sort: { position: 1 } },
+    });
     res.status(200).json({
       success: true,
       message: "berhasil mengambil data",

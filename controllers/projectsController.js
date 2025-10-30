@@ -20,28 +20,49 @@ export async function getProject(req, res) {
 export async function createProject(req, res) {
   try {
     const { workspaceId } = req.params;
+
     const workspace = await Workspace.findById(workspaceId);
     if (!workspace) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Workspace not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Workspace not found",
+      });
     }
 
     const project = await Project.create({
       ...req.body,
       workspace: workspaceId,
     });
+
+    const defaultGroup = await Group.create({
+      nama: "New Group",
+      project: project._id,
+    });
+
+    project.groups.push(defaultGroup._id);
+    await project.save();
+
     await Workspace.findByIdAndUpdate(workspaceId, {
       $push: { projects: project._id },
     });
 
+    const populatedProject = await Project.findById(project._id).populate({
+      path: "groups",
+      populate: { path: "task" },
+    });
+
     res.status(201).json({
       success: true,
-      message: "Proeject created successfully",
-      data: project,
+      message: "Project created successfully",
+      data: populatedProject,
     });
   } catch (error) {
-    console.error("Create Workspace Error:", error);
+    console.error("Create Project Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create project",
+      error: error.message,
+    });
   }
 }
 

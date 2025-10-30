@@ -17,25 +17,34 @@ export async function createGroup(req, res) {
 
     const project = await Project.findById(projectId);
     if (!project) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Project not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
     }
+
     const group = await Group.create({
-      ...req.body,
+      nama: "New Group",
       project: projectId,
     });
-    await Project.findByIdAndUpdate(projectId, {
-      $push: { groups: group._id },
-    });
+
+    project.groups.push(group._id);
+    await project.save();
+
+    const populatedGroup = await Group.findById(group._id).populate("task");
 
     res.status(201).json({
       success: true,
-      message: "group created successfully",
-      data: group,
+      message: "Group created successfully ",
+      data: populatedGroup,
     });
   } catch (error) {
-    console.error("Create group Error:", error);
+    console.error("Create Group Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create group",
+      error: error.message,
+    });
   }
 }
 
