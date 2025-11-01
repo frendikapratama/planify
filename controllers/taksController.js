@@ -42,10 +42,9 @@ export async function createTask(req, res) {
 export async function updateTask(req, res) {
   try {
     const { taskId } = req.params;
-    const { groupId, ...updateData } = req.body;
+    const { groupId, position, ...updateData } = req.body;
 
     const oldTask = await Task.findById(taskId);
-
     if (!oldTask) {
       return res
         .status(404)
@@ -56,10 +55,32 @@ export async function updateTask(req, res) {
       await Group.findByIdAndUpdate(oldTask.groups, {
         $pull: { task: oldTask._id },
       });
+
       await Group.findByIdAndUpdate(groupId, {
         $push: { task: oldTask._id },
       });
+
+      if (position !== undefined) {
+        const tasksInNewGroup = await Task.find({ groups: groupId }).sort({
+          position: 1,
+        });
+
+        const updatePromises = tasksInNewGroup
+          .map((task, idx) => {
+            if (idx >= position) {
+              return Task.findByIdAndUpdate(task._id, {
+                position: idx + 1,
+              });
+            }
+            return null;
+          })
+          .filter(Boolean);
+
+        await Promise.all(updatePromises);
+        updateData.position = position;
+      }
     }
+
     updateData.groups = groupId || oldTask.groups;
 
     const updatedTask = await Task.findByIdAndUpdate(taskId, updateData, {
@@ -73,6 +94,43 @@ export async function updateTask(req, res) {
     });
   } catch (error) {
     console.error("Update Task Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update task",
+      error: error.message,
+    });
+  }
+}
+
+export async function updateTaskPositions(req, res) {
+  try {
+    const { taskIds } = req.body;
+
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "taskIds harus berupa array dan tidak boleh kosong",
+      });
+    }
+
+    const updatePromises = taskIds.map((taskId, index) =>
+      Task.findByIdAndUpdate(taskId, { position: index }, { new: true })
+    );
+
+    const updatedTasks = await Promise.all(updatePromises);
+
+    res.status(200).json({
+      success: true,
+      message: "Task positions updated successfully",
+      data: updatedTasks,
+    });
+  } catch (error) {
+    console.error("Update Task Positions Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Gagal update posisi task",
+      error: error.message,
+    });
   }
 }
 
@@ -106,10 +164,13 @@ export const getTasksByGroup = async (req, res) => {
     if (!groups) {
       return res.status(400).json({ message: "groupId wajib disertakan" });
     }
-    const tasks = await Task.find({ groups }).populate({
-      path: "subtask",
-      options: { sort: { position: 1 } },
-    });
+    const tasks = await Task.find({ groups })
+      .populate({
+        path: "subtask",
+        options: { sort: { position: 1 } },
+      })
+      .sort({ position: 1 });
+
     res.status(200).json({
       success: true,
       message: "berhasil mengambil data",
