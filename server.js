@@ -7,13 +7,14 @@ import projectRoutes from "./routes/projectRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
 import taskRoutes from "./routes/taskRoutes.js";
 import subTaskRoutes from "./routes/subTaskRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 import cors from "cors";
 dotenv.config({ debug: true, override: true });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 connectDB();
-
 app.use(
   cors({
     origin: process.env.CLIENT_URL || "http://localhost:5173",
@@ -24,14 +25,16 @@ app.use(
   })
 );
 app.use(morgan("combined"));
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use("/api/", authRoutes);
 app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/project", projectRoutes);
 app.use("/api/group", groupRoutes);
 app.use("/api/task", taskRoutes);
 app.use("/api/subTask", subTaskRoutes);
+app.use("/api/users", userRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({
