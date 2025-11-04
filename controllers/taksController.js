@@ -2,17 +2,25 @@ import Task from "../models/Task.js";
 import Group from "../models/Group.js";
 import Subtask from "../models/Subtask.js";
 import User from "../models/User.js";
-import Workspace from "../models/Workspace.js";
-import crypto from "crypto";
-import Project from "../models/Project.js";
-import { transporter } from "../utils/sendEmail.js";
+import {
+  validateWorkspaceAccess,
+  getWorkspaceFromTask,
+} from "../utils/workspaceUtils.js";
+import {
+  validateInviteToken,
+  generateInviteToken,
+  createInviteObject,
+} from "../utils/inviteUtils.js";
+import { findOrCreateUser, addUserToWorkspace } from "../utils/userUtils.js";
+import { sendTaskPicInvitationEmail } from "../utils/emailUtils.js";
+import { handleError } from "../utils/errorHandler.js";
 
 export async function getTask(req, res) {
   try {
     const data = await Task.find().populate("subtask", "nama");
     res.status(200).json(data);
   } catch (error) {
-    console.error("get task error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -40,7 +48,7 @@ export async function createTask(req, res) {
       data: task,
     });
   } catch (error) {
-    console.error("Create task Error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -77,7 +85,6 @@ export async function updateTask(req, res) {
       updateData.pic = refreshedTask.pic;
     }
 
-    // Handle group movement (existing logic - TIDAK DIUBAH)
     if (groupId && groupId !== String(oldTask.groups)) {
       await Group.findByIdAndUpdate(oldTask.groups, {
         $pull: { task: oldTask._id },
@@ -120,12 +127,7 @@ export async function updateTask(req, res) {
       data: updatedTask,
     });
   } catch (error) {
-    console.error("Update Task Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to update task",
-      error: error.message,
-    });
+    return handleError(res, error);
   }
 }
 
@@ -152,12 +154,7 @@ export async function updateTaskPositions(req, res) {
       data: updatedTasks,
     });
   } catch (error) {
-    console.error("Update Task Positions Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal update posisi task",
-      error: error.message,
-    });
+    return handleError(res, error);
   }
 }
 
@@ -209,46 +206,25 @@ export const getTasksByGroup = async (req, res) => {
       data: tasks,
     });
   } catch (error) {
-    console.error("Error getTasksByGroup:", error);
-    res.status(500).json({ message: "Gagal memuat task" });
+    return handleError(res, error);
   }
 };
 
 async function handlePicAssignment(taskId, picEmail, task, requesterId) {
   try {
-    const group = await Group.findById(task.groups).populate("project");
-    if (!group || !group.project) {
-      return {
-        success: false,
-        status: 404,
-        message: "Group atau Project tidak ditemukan",
-      };
+    const result = await getWorkspaceFromTask(taskId);
+    if (!result.success) {
+      return result;
     }
 
-    const project = await Project.findById(group.project).populate("workspace");
-    if (!project || !project.workspace) {
-      return {
-        success: false,
-        status: 404,
-        message: "Project atau Workspace tidak ditemukan",
-      };
-    }
+    const { workspace, project } = result;
 
-    const workspaceId = project.workspace._id;
-    const workspace = await Workspace.findById(workspaceId).populate("members");
-
-    const isAuthorized =
-      workspace.owner.toString() === requesterId.toString() ||
-      workspace.members.some(
-        (m) => m._id.toString() === requesterId.toString()
-      );
-
-    if (!isAuthorized) {
-      return {
-        success: false,
-        status: 403,
-        message: "Anda tidak memiliki akses ke workspace ini",
-      };
+    const accessValidation = await validateWorkspaceAccess(
+      workspace._id,
+      requesterId
+    );
+    if (!accessValidation.valid) {
+      return accessValidation;
     }
 
     const targetUser = await User.findOne({ email: picEmail });
@@ -287,107 +263,41 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId) {
       };
     }
 
-    const inviteToken = crypto.randomBytes(16).toString("hex");
-
-    await Task.findByIdAndUpdate(taskId, {
-      $push: {
-        pendingPicInvites: {
-          email: picEmail,
-          token: inviteToken,
-          invitedBy: requesterId,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 hari
-        },
-      },
+    const inviteToken = generateInviteToken();
+    const inviteObject = createInviteObject(picEmail, inviteToken, {
+      invitedBy: requesterId,
     });
 
-    if (targetUser) {
-      // Kirim email untuk user yang sudah terdaftar
-      const inviteUrl = `http://localhost:5173/accept-pic-invite?taskId=${taskId}&token=${inviteToken}&registered=true`;
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: picEmail,
-        subject: `Undangan sebagai PIC untuk Task: ${task.nama}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Undangan Menjadi PIC Task</h2>
-            <p>Halo,</p>
-            <p>Anda telah diundang untuk menjadi PIC (Person In Charge) pada task:</p>
-            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0;">
-              <h3 style="margin: 0; color: #1f2937;">${task.nama}</h3>
-              <p style="margin: 5px 0; color: #6b7280;">Project: ${project.nama}</p>
-              <p style="margin: 5px 0; color: #6b7280;">Workspace: ${workspace.nama}</p>
-            </div>
-            <p>Klik tombol di bawah ini untuk menerima undangan:</p>
-            <a href="${inviteUrl}" 
-               style="display: inline-block; background-color: #2563eb; color: white; 
-                      padding: 12px 24px; text-decoration: none; border-radius: 6px; 
-                      margin: 15px 0;">
-              Terima Undangan
-            </a>
-            <p>Atau copy link berikut ke browser Anda:</p>
-            <p style="word-break: break-all; color: #6b7280;">${inviteUrl}</p>
-            <p>Undangan ini akan kedaluwarsa dalam 7 hari.</p>
-          </div>
-        `,
-      };
+    await Task.findByIdAndUpdate(taskId, {
+      $push: { pendingPicInvites: inviteObject },
+    });
 
-      await transporter.sendMail(mailOptions);
-      console.log(`📨 Email undangan terkirim ke user terdaftar: ${picEmail}`);
+    const isRegistered = !!targetUser;
+    const inviteUrl = `http://localhost:5173/accept-pic-invite?taskId=${taskId}&token=${inviteToken}${
+      isRegistered ? "&registered=true" : ""
+    }`;
 
-      return {
-        success: true,
-        invited: true,
-        message: `Undangan PIC dikirim ke ${picEmail}. User akan otomatis join workspace`,
-      };
-    }
-
-    // Kirim email untuk user baru yang perlu registrasi
-    const inviteUrl = `http://localhost:5173/accept-pic-invite?taskId=${taskId}&token=${inviteToken}`;
-
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
+    await sendTaskPicInvitationEmail({
       to: picEmail,
-      subject: `Undangan sebagai PIC untuk Task: ${task.nama}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #2563eb;">Undangan Menjadi PIC Task</h2>
-          <p>Halo,</p>
-          <p>Anda telah diundang untuk menjadi PIC (Person In Charge) pada task:</p>
-          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0;">
-            <h3 style="margin: 0; color: #1f2937;">${task.nama}</h3>
-            <p style="margin: 5px 0; color: #6b7280;">Project: ${project.nama}</p>
-            <p style="margin: 5px 0; color: #6b7280;">Workspace: ${workspace.nama}</p>
-          </div>
-          <p>Sebelum menerima undangan, Anda perlu melakukan registrasi terlebih dahulu:</p>
-          <a href="${inviteUrl}" 
-             style="display: inline-block; background-color: #2563eb; color: white; 
-                    padding: 12px 24px; text-decoration: none; border-radius: 6px; 
-                    margin: 15px 0;">
-            Daftar dan Terima Undangan
-          </a>
-          <p>Atau copy link berikut ke browser Anda:</p>
-          <p style="word-break: break-all; color: #6b7280;">${inviteUrl}</p>
-          <p>Undangan ini akan kedaluwarsa dalam 7 hari.</p>
-        </div>
-      `,
-    };
-
-    await transporter.sendMail(mailOptions);
-    console.log(`📨 Email undangan terkirim ke user baru: ${picEmail}`);
+      taskName: task.nama,
+      projectName: project.nama,
+      workspaceName: workspace.nama,
+      inviteUrl,
+      isRegistered,
+    });
 
     return {
       success: true,
       invited: true,
-      message: `Undangan PIC dikirim ke ${picEmail}. User perlu register terlebih dahulu`,
-      needsRegistration: true,
+      message: `Undangan PIC dikirim ke ${picEmail}. ${
+        isRegistered
+          ? "User akan otomatis join workspace"
+          : "User perlu register terlebih dahulu"
+      }`,
+      needsRegistration: !isRegistered,
     };
   } catch (error) {
-    console.error("Handle PIC Assignment Error:", error);
-    return {
-      success: false,
-      status: 500,
-      message: "Terjadi kesalahan saat assign PIC",
-    };
+    return handleError(res, error);
   }
 }
 
@@ -397,75 +307,47 @@ export async function acceptPicInvite(req, res) {
     const { token } = req.query;
     const { username, password, noHp, posisi, departemen, divisi } = req.body;
 
-    const task = await Task.findById(taskId).populate("groups");
+    const result = await getWorkspaceFromTask(taskId);
+    if (!result.success) {
+      return res.status(result.status).json(result);
+    }
 
-    if (!task) {
-      return res.status(404).json({
+    const { task, workspace } = result;
+
+    const validation = validateInviteToken(task.pendingPicInvites, token);
+    if (!validation.valid) {
+      if (validation.expired) {
+        task.pendingPicInvites = task.pendingPicInvites.filter(
+          (inv) => inv.token !== token
+        );
+        await task.save();
+      }
+      return res.status(validation.expired ? 400 : 404).json({
         success: false,
-        message: "Task tidak ditemukan",
+        message: validation.message,
       });
     }
 
-    const inviteData = task.pendingPicInvites?.find(
-      (inv) => inv.token === token
-    );
+    const invitedEmail = validation.inviteData.email;
+    const userResult = await findOrCreateUser(invitedEmail, {
+      username,
+      password,
+      noHp,
+      posisi,
+      departemen,
+      divisi,
+    });
 
-    if (!inviteData) {
-      return res.status(404).json({
-        success: false,
-        message: "Token tidak valid atau sudah kedaluwarsa",
-      });
-    }
-
-    // Pastikan expiresAt ada dan valid
-    if (new Date() > new Date(inviteData.expiresAt)) {
-      // Hapus invite yang kedaluwarsa
-      task.pendingPicInvites = task.pendingPicInvites.filter(
-        (inv) => inv.token !== token
-      );
-      await task.save();
-
+    if (!userResult.success) {
       return res.status(400).json({
         success: false,
-        message: "Undangan sudah kedaluwarsa",
+        message: userResult.message,
       });
     }
 
-    const invitedEmail = inviteData.email;
+    const { user } = userResult;
 
-    const group = await Group.findById(task.groups).populate("project");
-    const project = await Project.findById(group.project);
-    const workspace = await Workspace.findById(project.workspace);
-
-    let user = await User.findOne({ email: invitedEmail });
-
-    if (!user) {
-      if (!username || !password || !noHp || !posisi) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Data registrasi tidak lengkap (username, password, noHp, posisi wajib diisi)",
-        });
-      }
-
-      user = await User.create({
-        username,
-        email: invitedEmail,
-        password,
-        noHp,
-        posisi,
-        departemen,
-        divisi,
-      });
-      console.log(`🆕 User baru dibuat: ${invitedEmail}`);
-    }
-
-    if (!workspace.members.includes(user._id)) {
-      workspace.members.push(user._id);
-      await workspace.save();
-
-      user.workspaces.push(workspace._id);
-    }
+    await addUserToWorkspace(user._id, workspace._id);
 
     if (!task.pic.includes(user._id)) {
       task.pic.push(user._id);
@@ -477,8 +359,8 @@ export async function acceptPicInvite(req, res) {
 
     if (!user.assignedTasks.includes(task._id)) {
       user.assignedTasks.push(task._id);
+      await user.save();
     }
-    await user.save();
 
     res.status(200).json({
       success: true,
@@ -490,12 +372,7 @@ export async function acceptPicInvite(req, res) {
       },
     });
   } catch (error) {
-    console.error("Accept PIC Invite Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-      error: error.message,
-    });
+    return handleError(res, error);
   }
 }
 
@@ -540,11 +417,7 @@ export async function removePic(req, res) {
       });
     }
   } catch (error) {
-    console.error("Remove PIC Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal menghapus PIC",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -574,11 +447,7 @@ export async function removeAllPics(req, res) {
       message: "Semua PIC berhasil dihapus dari task",
     });
   } catch (error) {
-    console.error("Remove All PICs Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal menghapus semua PIC",
-    });
+    return handleError(res, error);
   }
 }
 
@@ -595,43 +464,32 @@ export async function verifyPicInvite(req, res) {
       });
     }
 
-    const inviteData = task.pendingPicInvites?.find(
-      (inv) => inv.token === token
-    );
-
-    if (!inviteData) {
-      return res.status(404).json({
+    const validation = validateInviteToken(task.pendingPicInvites, token);
+    if (!validation.valid) {
+      return res.status(validation.expired ? 400 : 404).json({
         success: false,
-        message: "Token tidak valid",
+        message: validation.message,
       });
     }
 
-    if (new Date() > new Date(inviteData.expiresAt)) {
-      return res.status(400).json({
-        success: false,
-        message: "Undangan sudah kedaluwarsa",
-      });
+    const result = await getWorkspaceFromTask(taskId);
+    if (!result.success) {
+      return res.status(result.status).json(result);
     }
 
-    const group = await Group.findById(task.groups).populate("project");
-    const project = await Project.findById(group.project);
-    const workspace = await Workspace.findById(project.workspace);
+    const { workspace, project } = result;
 
     res.status(200).json({
       success: true,
       data: {
-        invitedEmail: inviteData.email,
+        invitedEmail: validation.inviteData.email,
         taskName: task.nama,
         projectName: project.nama,
         workspaceName: workspace.nama,
-        expiresAt: inviteData.expiresAt,
+        expiresAt: validation.inviteData.expiresAt,
       },
     });
   } catch (error) {
-    console.error("Verify PIC Invite Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Terjadi kesalahan server",
-    });
+    return handleError(res, error);
   }
 }

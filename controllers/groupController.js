@@ -1,13 +1,13 @@
 import Group from "../models/Group.js";
 import Project from "../models/Project.js";
 import Task from "../models/Task.js";
-
+import { handleError } from "../utils/errorHandler.js";
 export async function getGroup(req, res) {
   try {
     const data = await Group.find().populate("task", "nama");
     res.status(200).json(data);
   } catch (error) {
-    console.error("Create Workspace Error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -39,12 +39,7 @@ export async function createGroup(req, res) {
       data: populatedGroup,
     });
   } catch (error) {
-    console.error("Create Group Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to create group",
-      error: error.message,
-    });
+    return handleError(res, error);
   }
 }
 
@@ -81,7 +76,7 @@ export async function updateGroup(req, res) {
       data: updatedGroup,
     });
   } catch (error) {
-    console.error("Update Group Error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -108,6 +103,6 @@ export async function deleteGroup(req, res) {
       message: "Group deleted successfully",
     });
   } catch (error) {
-    console.error("Delete Group Error:", error);
+    return handleError(res, error);
   }
 }

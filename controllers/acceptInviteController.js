@@ -47,7 +47,6 @@ export async function acceptInvite(req, res) {
       return res.status(400).json({ message: "User sudah menjadi member" });
     }
   } catch (error) {
-    console.error("Accept invite error:", error);
-    res.status(500).json({ message: "Terjadi kesalahan server" });
+    return handleError(res, error);
   }
 }
