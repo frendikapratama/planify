@@ -1,6 +1,7 @@
 import Project from "../models/Project.js";
 import Workspace from "../models/Workspace.js";
 import Group from "../models/Group.js";
+import { handleError } from "../utils/errorHandler.js";
 
 export async function getProject(req, res) {
   try {
@@ -13,7 +14,7 @@ export async function getProject(req, res) {
       data,
     });
   } catch (error) {
-    console.error("Create Workspace Error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -57,12 +58,7 @@ export async function createProject(req, res) {
       data: populatedProject,
     });
   } catch (error) {
-    console.error("Create Project Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to create project",
-      error: error.message,
-    });
+    return handleError(res, error);
   }
 }
 
@@ -104,7 +100,7 @@ export async function updateProject(req, res) {
       data: updatedProject,
     });
   } catch (error) {
-    console.log("Update Project Error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -133,7 +129,7 @@ export async function deleteProject(req, res) {
       message: "Project dan semua group terkait berhasil dihapus",
     });
   } catch (error) {
-    console.error("Delete Project Error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -151,6 +147,6 @@ export async function getProjectById(req, res) {
       data: project,
     });
   } catch (error) {
-    console.log("gagal get by id ", error);
+    return handleError(res, error);
   }
 }

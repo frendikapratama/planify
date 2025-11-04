@@ -1,5 +1,6 @@
 import Subtask from "../models/Subtask.js";
 import Task from "../models/Task.js";
+import { handleError } from "../utils/errorHandler.js";
 
 export async function getSubTask(req, res) {
   try {
@@ -8,7 +9,7 @@ export async function getSubTask(req, res) {
       .sort({ position: 1 });
     res.status(200).json(data);
   } catch (error) {
-    console.error("get subtask error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -37,7 +38,7 @@ export async function createSubTask(req, res) {
       data: subtask,
     });
   } catch (error) {
-    console.error("Create subtask Error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -70,7 +71,7 @@ export async function updateSubTask(req, res) {
       data: updatedSubTask,
     });
   } catch (error) {
-    console.error("Update subtask Error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -92,7 +93,7 @@ export async function deleteSubTask(req, res) {
       data: subtask,
     });
   } catch (error) {
-    console.error("Delete subtask Error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -116,7 +117,7 @@ export async function positionSubTask(req, res) {
       message: "Subtask positions updated successfully",
     });
   } catch (error) {
-    console.error("Position Subtask Error:", error);
+    return handleError(res, error);
   }
 }
 
@@ -136,6 +137,6 @@ export async function getByTask(req, res) {
       data,
     });
   } catch (error) {
-    console.log("gagal mengambil", error);
+    return handleError(res, error);
   }
 }

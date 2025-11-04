@@ -1,7 +1,7 @@
 import User from "../models/User.js";
 import { transporter } from "../utils/sendEmail.js";
 import fs from "fs";
-
+import { handleError } from "../utils/errorHandler.js";
 export async function getUsers(req, res) {
   try {
     const {
@@ -54,7 +54,7 @@ export async function getUsers(req, res) {
       totalPages: Math.ceil(total / parseInt(limit)),
     });
   } catch (error) {
-    console.log(error);
+    return handleError(res, error);
   }
 }
 
@@ -76,7 +76,7 @@ export async function getUserById(req, res) {
       data: user,
     });
   } catch (error) {
-    console.log(error);
+    return handleError(res, error);
   }
 }
 
@@ -123,12 +123,7 @@ export async function createUser(req, res) {
       },
     });
   } catch (error) {
-    console.error("Update Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "gagal membuat user",
-      error: error.message,
-    });
+    return handleError(res, error);
   }
 }
 
@@ -173,7 +168,7 @@ export async function updateUser(req, res) {
       data: user,
     });
   } catch (error) {
-    console.log(error);
+    return handleError(res, error);
   }
 }
 
@@ -204,7 +199,7 @@ export async function deletUser(req, res) {
       message: "user berhasil di hapus",
     });
   } catch (error) {
-    console.log(error);
+    return handleError(res, error);
   }
 }
 
@@ -235,7 +230,7 @@ export async function sendOTP(req, res) {
 
     res.json({ success: true, message: "OTP telah di kirim ke email anda" });
   } catch (error) {
-    console.log(error);
+    return handleError(res, error);
   }
 }
 
@@ -276,7 +271,7 @@ export async function changePassword(req, res) {
       message: "success change password",
     });
   } catch (error) {
-    console.log(error);
+    return handleError(res, error);
   }
 }
 
@@ -296,7 +291,7 @@ export async function searchMekanik(req, res) {
       data,
     });
   } catch (error) {
-    console.log(error);
+    return handleError(res, error);
   }
 }
 
@@ -316,6 +311,6 @@ export async function searchKasie(req, res) {
       data,
     });
   } catch (error) {
-    console.log(error);
+    return handleError(res, error);
   }
 }
