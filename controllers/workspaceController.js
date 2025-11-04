@@ -13,7 +13,11 @@ import { handleError } from "../utils/errorHandler.js";
 
 export async function getWorkspace(req, res) {
   try {
-    const data = await Workspace.find().populate("projects", "nama");
+    const userId = req.user._id;
+    const data = await Workspace.find({
+      $or: [{ owner: userId }, { members: userId }],
+    }).populate("projects", "nama");
+
     res.status(200).json({
       success: true,
       message: "workspace berhasil dibuat",
