@@ -34,10 +34,19 @@ export async function createTask(req, res) {
         .status(404)
         .json({ success: false, message: "Group not found" });
     }
+
+    const lastTask = await Task.findOne({ groups: groupId })
+      .sort({ position: -1 })
+      .limit(1);
+
+    const nextPosition = lastTask ? lastTask.position + 1 : 0;
+
     const task = await Task.create({
       ...req.body,
       groups: groupId,
+      position: nextPosition,
     });
+
     await Group.findByIdAndUpdate(groupId, {
       $push: { task: task._id },
     });
