@@ -13,10 +13,7 @@ import { handleError } from "../utils/errorHandler.js";
 
 export async function getWorkspace(req, res) {
   try {
-    const userId = req.user._id;
-    const data = await Workspace.find({
-      $or: [{ owner: userId }, { members: userId }],
-    }).populate("projects", "nama");
+    const data = await Workspace.find().populate("projects", "nama");
 
     res.status(200).json({
       success: true,
@@ -59,8 +56,8 @@ export async function createWorkspace(req, res) {
   try {
     const newWorkspace = await Workspace.create({
       nama: req.body.nama,
-      owner: req.user._id,
-      members: [req.user._id],
+      // owner: req.user._id,
+      // members: [req.user._id],
     });
 
     res.status(201).json({

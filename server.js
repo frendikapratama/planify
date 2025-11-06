@@ -9,6 +9,8 @@ import taskRoutes from "./routes/taskRoutes.js";
 import subTaskRoutes from "./routes/subTaskRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import collaboratRoutes from "./routes/collaboratRoutes.js";
+
 import cors from "cors";
 dotenv.config({ debug: true, override: true });
 
@@ -35,6 +37,7 @@ app.use("/api/group", groupRoutes);
 app.use("/api/task", taskRoutes);
 app.use("/api/subTask", subTaskRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/collaboration", collaboratRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({

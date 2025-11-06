@@ -219,7 +219,7 @@ export const getTasksByGroup = async (req, res) => {
   }
 };
 
-async function handlePicAssignment(taskId, picEmail, task, requesterId) {
+async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
   try {
     const result = await getWorkspaceFromTask(taskId);
     if (!result.success) {
@@ -227,14 +227,6 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId) {
     }
 
     const { workspace, project } = result;
-
-    const accessValidation = await validateWorkspaceAccess(
-      workspace._id,
-      requesterId
-    );
-    if (!accessValidation.valid) {
-      return accessValidation;
-    }
 
     const targetUser = await User.findOne({ email: picEmail });
     const currentTask = await Task.findById(taskId);
