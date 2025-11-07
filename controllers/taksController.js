@@ -2,10 +2,7 @@ import Task from "../models/Task.js";
 import Group from "../models/Group.js";
 import Subtask from "../models/Subtask.js";
 import User from "../models/User.js";
-import {
-  validateWorkspaceAccess,
-  getWorkspaceFromTask,
-} from "../utils/workspaceUtils.js";
+import { getWorkspaceFromTask } from "../utils/workspaceUtils.js";
 import {
   validateInviteToken,
   generateInviteToken,

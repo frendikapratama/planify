@@ -14,7 +14,7 @@ import { authenticate } from "../middleware/auth.js";
 const router = express.Router();
 
 router.get("/", getWorkspace);
-router.post("/", authenticate, createWorkspace);
+router.post("/:kuarterId", authenticate, createWorkspace);
 router.get("/:workspaceId", getWorkspaceById);
 router.put("/:workspaceId", updateWorkspace);
 router.delete("/:workspaceId", deleteWorkspace);
