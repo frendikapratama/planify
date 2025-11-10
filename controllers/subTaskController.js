@@ -166,7 +166,7 @@ async function handleSubtaskPicAssignment(
     });
 
     const isRegistered = !!targetUser;
-    const inviteUrl = `http://localhost:5173/accept-subtask-pic-invite?subTaskId=${subTaskId}&token=${inviteToken}${
+    const inviteUrl = `http://localhost:5173/accept-pic-invite?subTaskId=${subTaskId}&token=${inviteToken}${
       isRegistered ? "&registered=true" : ""
     }`;
 
@@ -322,7 +322,7 @@ export async function verifySubtaskPicInvite(req, res) {
     const { subTaskId } = req.params;
     const { token } = req.query;
 
-    const subtask = await Subtask.findById(subTaskId);
+    const subtask = await Subtask.findById(subTaskId).populate("task");
     if (!subtask) {
       return res.status(404).json({
         success: false,
