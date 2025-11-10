@@ -9,6 +9,8 @@ const taskSchema = new mongoose.Schema(
     meeting_date: { type: Date },
     start_date: { type: Date },
     due_date: { type: Date },
+    finish_date: { type: Date },
+    note: { type: String, default: "Planning" },
     priority: { type: String },
     position: { type: Number, default: 0 },
     groups: [{ type: mongoose.Schema.Types.ObjectId, ref: "Group" }],
