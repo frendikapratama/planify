@@ -2,6 +2,7 @@ import express from "express";
 import connectDB from "./config/database.js";
 import morgan from "morgan";
 import dotenv from "dotenv";
+import path from "path";
 import workspaceRoutes from "./routes/workspaceRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
@@ -11,6 +12,8 @@ import userRoutes from "./routes/userRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import collaboratRoutes from "./routes/collaboratRoutes.js";
 import kuarterRoutes from "./routes/kuarterRoutes.js";
+import commentRoutes from "./routes/commentRoutes.js";
+import attachmentRoutes from "./routes/attachmentRoutes.js";
 
 import cors from "cors";
 dotenv.config({ debug: true, override: true });
@@ -31,6 +34,8 @@ app.use(morgan("combined"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
 app.use("/api/", authRoutes);
 app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/project", projectRoutes);
@@ -40,6 +45,8 @@ app.use("/api/subTask", subTaskRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/collaboration", collaboratRoutes);
 app.use("/api/kuarter", kuarterRoutes);
+app.use("/api/comment", commentRoutes);
+app.use("/api/attachment", attachmentRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({

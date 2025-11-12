@@ -25,4 +25,13 @@ router.delete("/:taskId/pic", authenticate, removePic);
 router.delete("/:taskId/pic/all", authenticate, removeAllPics);
 router.get("/:taskId/verify-invite", verifyPicInvite);
 
+// Attachment routes
+// router.post(
+//   "/:taskId/attachments",
+//   authenticate,
+//   upload.single("file"),
+//   uploadAttachment
+// );
+
+// Meeting link route
 export default router;

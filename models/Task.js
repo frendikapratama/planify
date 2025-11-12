@@ -27,6 +27,18 @@ const taskSchema = new mongoose.Schema(
         },
       },
     ],
+
+    attachments: [
+      {
+        fileName: { type: String, required: true },
+        fileSize: { type: Number },
+        fileType: { type: String },
+        fileUrl: { type: String, required: true },
+        uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        uploadedAt: { type: Date, default: Date.now },
+      },
+    ],
+    meeting_link: { type: String },
   },
   { timestamps: true }
 );
