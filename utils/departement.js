@@ -2,7 +2,7 @@ export const DEPARTEMEN_DIVISI = [
   {
     departemenId: "hpc",
     departemenName: "HPC",
-    divisi: ["Papercore", "Honeycomb Variant"],
+    divisi: ["Papercore", "Honeycomb Variant", "IT"],
   },
   {
     departemenId: "pbpg",

@@ -185,6 +185,7 @@ export async function deleteTask(req, res) {
     });
   } catch (error) {
     console.error("Delete Task Error:", error);
+    return handleError(res, error);
   }
 }
 
