@@ -14,7 +14,7 @@ import { handleError } from "../utils/errorHandler.js";
 
 export async function getTask(req, res) {
   try {
-    const data = await Task.find().populate("subtask", "nama");
+    const data = await Task.find();
     res.status(200).json(data);
   } catch (error) {
     return handleError(res, error);
@@ -194,6 +194,7 @@ export const getTasksByGroup = async (req, res) => {
     if (!groups) {
       return res.status(400).json({ message: "groupId wajib disertakan" });
     }
+
     const tasks = await Task.find({ groups })
       .populate({
         path: "subtask",
@@ -202,7 +203,6 @@ export const getTasksByGroup = async (req, res) => {
       .populate({
         path: "pic",
         select: "username email",
-        options: { sort: { position: 1 } },
       })
       .sort({ position: 1 });
 
@@ -271,7 +271,9 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
     });
 
     const isRegistered = !!targetUser;
-    const inviteUrl = `http://localhost:5173/accept-pic-invite?taskId=${taskId}&token=${inviteToken}${
+    const inviteUrl = `${
+      process.env.CLIENT_URL
+    }/accept-pic-invite?taskId=${taskId}&token=${inviteToken}${
       isRegistered ? "&registered=true" : ""
     }`;
 
@@ -486,6 +488,33 @@ export async function verifyPicInvite(req, res) {
         workspaceName: workspace.nama,
         expiresAt: validation.inviteData.expiresAt,
       },
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+export async function updateMeetingLink(req, res) {
+  try {
+    const { taskId } = req.params;
+    const { meetingLink } = req.body;
+
+    const task = await Task.findByIdAndUpdate(
+      taskId,
+      { meetingLink },
+      { new: true }
+    );
+
+    if (!task) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Task not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Meeting link updated successfully",
+      data: task,
     });
   } catch (error) {
     return handleError(res, error);
