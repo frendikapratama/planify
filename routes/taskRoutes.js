@@ -10,6 +10,7 @@ import {
   removePic,
   removeAllPics,
   verifyPicInvite,
+  getTasksByProjectSimple,
 } from "../controllers/taksController.js";
 import { authenticate } from "../middleware/auth.js";
 const router = express.Router();
@@ -24,7 +25,7 @@ router.post("/:taskId/accept-pic-invite", acceptPicInvite);
 router.delete("/:taskId/pic", authenticate, removePic);
 router.delete("/:taskId/pic/all", authenticate, removeAllPics);
 router.get("/:taskId/verify-invite", verifyPicInvite);
-
+router.get("/:projectId", getTasksByProjectSimple);
 // Attachment routes
 // router.post(
 //   "/:taskId/attachments",
