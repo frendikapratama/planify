@@ -12,6 +12,45 @@ import { findOrCreateUser, addUserToWorkspace } from "../utils/userUtils.js";
 import { sendTaskPicInvitationEmail } from "../utils/emailUtils.js";
 import { handleError } from "../utils/errorHandler.js";
 
+export async function getTasksByProjectSimple(req, res) {
+  try {
+    const { projectId } = req.params;
+
+    if (!projectId) {
+      return res.status(400).json({
+        success: false,
+        message: "Project ID wajib disertakan",
+      });
+    }
+
+    const groups = await Group.find({ project: projectId });
+
+    const tasksByGroup = await Promise.all(
+      groups.map(async (group) => {
+        const tasks = await Task.find({ groups: group._id })
+          .populate("pic", "username email")
+          .populate("subtask")
+          .sort({ position: 1 });
+
+        return {
+          groupId: group._id,
+          groupName: group.nama,
+          groupDescription: group.description,
+          tasks: tasks,
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Berhasil mengambil data task berdasarkan project",
+      data: tasksByGroup,
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
 export async function getTask(req, res) {
   try {
     const data = await Task.find();

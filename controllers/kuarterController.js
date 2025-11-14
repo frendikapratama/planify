@@ -21,9 +21,7 @@ export async function get(req, res) {
 
 export async function create(req, res) {
   try {
-    const newKuarter = await Kuarter.create({
-      nama: req.body.nama,
-    });
+    const newKuarter = await Kuarter.create(req.body);
     res.status(201).json({
       success: true,
       message: "task created successfully",
@@ -37,11 +35,10 @@ export async function create(req, res) {
 export async function edit(req, res) {
   try {
     const { KuarterId } = req.params;
-    const { nama } = req.body;
 
     const updatedKuarter = await Kuarter.findByIdAndUpdate(
       KuarterId,
-      { nama },
+      req.body,
       { new: true, runValidators: true }
     );
 

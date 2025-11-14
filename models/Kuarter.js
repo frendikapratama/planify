@@ -5,6 +5,7 @@ const kuarterSchema = new mongoose.Schema(
       type: String,
     },
     workspace: [{ type: mongoose.Schema.Types.ObjectId, ref: "Workspace" }],
+    departemen: { type: String },
   },
   { timestamps: true }
 );
