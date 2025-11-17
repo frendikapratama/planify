@@ -373,12 +373,14 @@ export async function getProgresByWorkspace(req, res) {
     const groups = await Group.find({ project: { $in: projectIds } });
 
     // Hitung undated task dari semua task di workspace
-    // const allGroupIds = groups.map((g) => g._id);
-    // const allTasks = await Task.find({ groups: { $in: allGroupIds } });
+    const allGroupIds = groups.map((g) => g._id);
+    const allTasks = await Task.find({ groups: { $in: allGroupIds } });
 
     // const undatedTask = allTasks.filter(
     //   (t) => !t.due_date || t.due_date === null
     // ).length;
+
+    const totalGroup = groups.length;
 
     const projectsProgress = await Promise.all(
       projects.map(async (project) => {
@@ -464,6 +466,7 @@ export async function getProgresByWorkspace(req, res) {
         notStartedProject,
         planned: planningProject,
         undatedProject,
+        totalGroup,
         // undatedTask,
         progress: workspaceProgress,
         projects: projectsProgress,
