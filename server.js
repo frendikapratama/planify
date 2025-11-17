@@ -15,6 +15,7 @@ import kuarterRoutes from "./routes/kuarterRoutes.js";
 import commentRoutes from "./routes/commentRoutes.js";
 import attachmentRoutes from "./routes/attachmentRoutes.js";
 import progresRoutes from "./routes/progresRoutes.js";
+import ganchartRoutes from "./routes/ganchartRoutes.js";
 
 import cors from "cors";
 dotenv.config({ debug: true, override: true });
@@ -49,6 +50,7 @@ app.use("/api/kuarter", kuarterRoutes);
 app.use("/api/comment", commentRoutes);
 app.use("/api/attachment", attachmentRoutes);
 app.use("/api/progress", progresRoutes);
+app.use("/api/ganchart", ganchartRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({
