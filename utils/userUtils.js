@@ -1,5 +1,4 @@
 import User from "../models/User.js";
-import Workspace from "../models/Workspace.js";
 
 export async function findOrCreateUser(email, userData = {}) {
   let user = await User.findOne({ email });
@@ -30,21 +29,4 @@ export async function findOrCreateUser(email, userData = {}) {
   }
 
   return { success: true, user, isNewUser: false };
-}
-
-export async function addUserToWorkspace(userId, workspaceId) {
-  const workspace = await Workspace.findById(workspaceId);
-  const user = await User.findById(userId);
-
-  if (!workspace.members.includes(userId)) {
-    workspace.members.push(userId);
-    await workspace.save();
-  }
-
-  if (!user.workspaces.includes(workspaceId)) {
-    user.workspaces.push(workspaceId);
-    await user.save();
-  }
-
-  return { workspace, user };
 }

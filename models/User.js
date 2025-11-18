@@ -42,7 +42,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "member", "head_dev"],
+      enum: ["project_manajer", "member", "system_admin"],
       default: "member",
     },
     resetOTP: String,

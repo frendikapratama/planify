@@ -2,6 +2,7 @@ import User from "../models/User.js";
 import { transporter } from "../utils/sendEmail.js";
 import fs from "fs";
 import { handleError } from "../utils/errorHandler.js";
+
 export async function getUsers(req, res) {
   try {
     const {

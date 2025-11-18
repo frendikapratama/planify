@@ -10,7 +10,7 @@ import {
   generateInviteToken,
   createInviteObject,
 } from "../utils/inviteUtils.js";
-import { findOrCreateUser, addUserToWorkspace } from "../utils/userUtils.js";
+import { findOrCreateUser } from "../utils/userUtils.js";
 import { sendWorkspaceInvitationEmail } from "../utils/emailUtils.js";
 import { handleError } from "../utils/errorHandler.js";
 
@@ -20,7 +20,7 @@ export async function getWorkspace(req, res) {
 
     res.status(200).json({
       success: true,
-      message: "workspace berhasil dibuat",
+      message: "successfully fetched workspaces",
       data,
     });
   } catch (error) {
@@ -47,7 +47,7 @@ export async function getWorkspaceById(req, res) {
       });
     res.status(200).json({
       success: true,
-      message: "workspace berhasil dibuat",
+      message: "successfully fetched workspace",
       data: workspace,
     });
   } catch (error) {
@@ -159,6 +159,7 @@ export async function inviteMemberByEmail(req, res) {
       "owner",
       "username"
     );
+
     if (!workspace)
       return res.status(404).json({ message: "Workspace tidak ditemukan" });
 
@@ -171,24 +172,34 @@ export async function inviteMemberByEmail(req, res) {
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      if (!workspace.members.includes(existingUser._id)) {
-        await addUserToWorkspace(existingUser._id, workspaceId);
-
-        console.log(`✅ ${email} langsung ditambahkan sebagai member`);
-        return res.status(200).json({
-          success: true,
-          message: "User sudah terdaftar dan ditambahkan ke workspace",
-        });
+      if (workspace.members.includes(existingUser._id)) {
+        return res
+          .status(400)
+          .json({ message: "User sudah menjadi anggota workspace" });
       }
 
-      return res
-        .status(400)
-        .json({ message: "User sudah menjadi anggota workspace" });
+      await Workspace.findByIdAndUpdate(workspaceId, {
+        $addToSet: { members: existingUser._id },
+      });
+
+      await User.findByIdAndUpdate(existingUser._id, {
+        $addToSet: { workspaces: workspaceId },
+      });
+
+      console.log(`✅ ${email} langsung ditambahkan sebagai member`);
+      return res.status(200).json({
+        success: true,
+        message: "User sudah terdaftar dan ditambahkan ke workspace",
+      });
     }
 
     const inviteToken = generateInviteToken();
-    workspace.pendingInvites.push(createInviteObject(email, inviteToken));
-    await workspace.save();
+
+    await Workspace.findByIdAndUpdate(workspaceId, {
+      $push: {
+        pendingInvites: createInviteObject(email, inviteToken),
+      },
+    });
 
     const inviteUrl = `http://localhost:5173/accept-workspace-invite?token=${inviteToken}`;
 
@@ -235,6 +246,7 @@ export async function acceptInvite(req, res) {
     }
 
     const invitedEmail = validation.inviteData.email;
+
     const userResult = await findOrCreateUser(invitedEmail, {
       username,
       password,
@@ -246,21 +258,28 @@ export async function acceptInvite(req, res) {
       return res.status(400).json({ message: userResult.message });
     }
 
-    if (!workspace.members.includes(userResult.user._id)) {
-      await addUserToWorkspace(userResult.user._id, workspace._id);
+    const userId = userResult.user._id;
 
-      workspace.pendingInvites = workspace.pendingInvites.filter(
-        (inv) => inv.token !== token
-      );
-      await workspace.save();
-
-      return res.status(200).json({
-        success: true,
-        message: "Berhasil bergabung ke workspace",
-      });
-    } else {
+    if (workspace.members.includes(userId)) {
       return res.status(400).json({ message: "User sudah menjadi member" });
     }
+    await Workspace.findByIdAndUpdate(
+      workspace._id,
+      {
+        $addToSet: { members: userId },
+        $pull: { pendingInvites: { token: token } },
+      },
+      { new: true }
+    );
+
+    await User.findByIdAndUpdate(userId, {
+      $addToSet: { workspaces: workspace._id },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Berhasil bergabung ke workspace",
+    });
   } catch (error) {
     return handleError(res, error);
   }

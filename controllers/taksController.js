@@ -8,9 +8,10 @@ import {
   generateInviteToken,
   createInviteObject,
 } from "../utils/inviteUtils.js";
-import { findOrCreateUser, addUserToWorkspace } from "../utils/userUtils.js";
+import { findOrCreateUser } from "../utils/userUtils.js";
 import { sendTaskPicInvitationEmail } from "../utils/emailUtils.js";
 import { handleError } from "../utils/errorHandler.js";
+import Workspace from "../models/Workspace.js";
 
 export async function getTasksByProjectSimple(req, res) {
   try {
@@ -356,10 +357,9 @@ export async function acceptPicInvite(req, res) {
     const validation = validateInviteToken(task.pendingPicInvites, token);
     if (!validation.valid) {
       if (validation.expired) {
-        task.pendingPicInvites = task.pendingPicInvites.filter(
-          (inv) => inv.token !== token
-        );
-        await task.save();
+        await Task.findByIdAndUpdate(taskId, {
+          $pull: { pendingPicInvites: { token: token } },
+        });
       }
       return res.status(validation.expired ? 400 : 404).json({
         success: false,
@@ -368,6 +368,7 @@ export async function acceptPicInvite(req, res) {
     }
 
     const invitedEmail = validation.inviteData.email;
+
     const userResult = await findOrCreateUser(invitedEmail, {
       username,
       password,
@@ -384,22 +385,23 @@ export async function acceptPicInvite(req, res) {
       });
     }
 
-    const { user } = userResult;
+    const userId = userResult.user._id;
 
-    await addUserToWorkspace(user._id, workspace._id);
+    await Workspace.findByIdAndUpdate(workspace._id, {
+      $addToSet: { members: userId },
+    });
 
-    if (!task.pic.includes(user._id)) {
-      task.pic.push(user._id);
-    }
-    task.pendingPicInvites = task.pendingPicInvites.filter(
-      (inv) => inv.token !== token
-    );
-    await task.save();
+    await User.findByIdAndUpdate(userId, {
+      $addToSet: {
+        workspaces: workspace._id,
+        assignedTasks: taskId,
+      },
+    });
 
-    if (!user.assignedTasks.includes(task._id)) {
-      user.assignedTasks.push(task._id);
-      await user.save();
-    }
+    await Task.findByIdAndUpdate(taskId, {
+      $addToSet: { pic: userId },
+      $pull: { pendingPicInvites: { token: token } },
+    });
 
     res.status(200).json({
       success: true,
@@ -407,7 +409,7 @@ export async function acceptPicInvite(req, res) {
       data: {
         task: task.nama,
         workspace: workspace.nama,
-        pic: user.username,
+        pic: userResult.user.username,
       },
     });
   } catch (error) {

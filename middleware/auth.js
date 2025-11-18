@@ -6,9 +6,7 @@ export async function authenticate(req, res, next) {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer")) {
-      return res
-        .status(401)
-        .json({ message: "Token tidak ada atau format salah" });
+      return res.status(401).json({ message: "Anda Tidak Punya Akses" });
     }
 
     const token = authHeader.split(" ")[1];
