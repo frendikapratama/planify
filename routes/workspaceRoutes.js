@@ -27,21 +27,13 @@ router.put(
   authorize("project_manajer", "system_admin"),
   updateWorkspace
 );
-router.delete(
-  "/:workspaceId",
-  authorize("project_manajer", "system_admin"),
-  deleteWorkspace
-);
+router.delete("/:workspaceId", authorize("system_admin"), deleteWorkspace);
 router.post(
   "/:workspaceId/invite",
   authenticate,
-  authorize("project_manajer", "system_admin"),
+  // authorize("project_manajer", "system_admin"),
   inviteMemberByEmail
 );
-router.post(
-  "/invite/accept",
-
-  acceptInvite
-);
+router.post("/invite/accept", acceptInvite);
 
 export default router;

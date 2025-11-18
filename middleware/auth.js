@@ -1,6 +1,8 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-
+import Group from "../models/Group.js";
+import Task from "../models/Task.js";
+import Project from "../models/Project.js";
 export async function authenticate(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
@@ -42,4 +44,114 @@ export function authorize(...roles) {
     }
     next();
   };
+}
+
+export async function checkWorkspaceMemberFromTask(req, res, next) {
+  try {
+    const { taskId } = req.params;
+    const userId = req.user._id;
+
+    const task = await Task.findById(taskId);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: "Task tidak ditemukan",
+      });
+    }
+
+    const group = await Group.findById(task.groups);
+    if (!group) {
+      return res.status(404).json({
+        success: false,
+        message: "Group tidak ditemukan",
+      });
+    }
+
+    const project = await Project.findById(group.project).populate("workspace");
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: "Project tidak ditemukan",
+      });
+    }
+
+    if (!project.workspace) {
+      return res.status(404).json({
+        success: false,
+        message: "Workspace tidak ditemukan",
+      });
+    }
+
+    const isMember = project.workspace.members.some(
+      (member) => member.toString() === userId.toString()
+    );
+
+    if (!isMember) {
+      return res.status(403).json({
+        success: false,
+        message: "Anda bukan member dari workspace ini",
+      });
+    }
+
+    req.task = task;
+    req.workspace = project.workspace;
+    next();
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Gagal memverifikasi akses workspace",
+      error: error.message,
+    });
+  }
+}
+
+export async function checkWorkspaceMemberFromGroup(req, res, next) {
+  try {
+    const { groupId } = req.params;
+    const userId = req.user._id;
+
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({
+        success: false,
+        message: "Group tidak ditemukan",
+      });
+    }
+
+    const project = await Project.findById(group.project).populate("workspace");
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: "Project tidak ditemukan",
+      });
+    }
+
+    if (!project.workspace) {
+      return res.status(404).json({
+        success: false,
+        message: "Workspace tidak ditemukan",
+      });
+    }
+
+    const isMember = project.workspace.members.some(
+      (member) => member.toString() === userId.toString()
+    );
+
+    if (!isMember) {
+      return res.status(403).json({
+        success: false,
+        message: "Anda bukan member dari workspace ini",
+      });
+    }
+
+    req.group = group;
+    req.workspace = project.workspace;
+    next();
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Gagal memverifikasi akses workspace",
+      error: error.message,
+    });
+  }
 }
