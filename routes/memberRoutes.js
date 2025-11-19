@@ -6,6 +6,6 @@ import {
 } from "../controllers/memberController.js";
 
 const router = express.Router();
-router.get("/:workspaceId", getMemberWorkspace);
+router.get("/workspace/:workspaceId", getMemberWorkspace);
 router.get("/project/:projectId", getProjectTasksWithPics);
 export default router;

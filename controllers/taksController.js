@@ -256,7 +256,8 @@ export const getTasksByGroup = async (req, res) => {
   }
 };
 
-async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
+// Function untuk handle assignment PIC
+async function handlePicAssignment(taskId, picEmail, task, requesterId) {
   try {
     const result = await getWorkspaceFromTask(taskId);
     if (!result.success) {
@@ -268,6 +269,7 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
     const targetUser = await User.findOne({ email: picEmail });
     const currentTask = await Task.findById(taskId);
 
+    // Cek apakah user sudah menjadi PIC task ini
     if (
       currentTask.pic &&
       currentTask.pic.some(
@@ -280,12 +282,32 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
       };
     }
 
-    if (
-      targetUser &&
-      workspace.members.some(
-        (m) => m._id.toString() === targetUser._id.toString()
-      )
-    ) {
+    // Jika user ada dan terdaftar
+    if (targetUser) {
+      const isMember = workspace.members.some(
+        (m) => m.user.toString() === targetUser._id.toString()
+      );
+
+      if (!isMember) {
+        await Workspace.findByIdAndUpdate(workspace._id, {
+          $push: {
+            members: {
+              user: targetUser._id,
+              role: "member",
+            },
+          },
+        });
+
+        await User.findByIdAndUpdate(targetUser._id, {
+          $push: {
+            workspaces: {
+              workspace: workspace._id,
+              role: "member",
+            },
+          },
+        });
+      }
+
       await Task.findByIdAndUpdate(taskId, {
         $addToSet: { pic: targetUser._id },
       });
@@ -297,7 +319,9 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
 
       return {
         success: true,
-        message: `${picEmail} berhasil ditambahkan sebagai PIC`,
+        message: `${picEmail} berhasil ditambahkan sebagai PIC${
+          !isMember ? " dan bergabung ke workspace sebagai member" : ""
+        }`,
       };
     }
 
@@ -310,12 +334,7 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
       $push: { pendingPicInvites: inviteObject },
     });
 
-    const isRegistered = !!targetUser;
-    const inviteUrl = `${
-      process.env.CLIENT_URL
-    }/accept-pic-invite?taskId=${taskId}&token=${inviteToken}${
-      isRegistered ? "&registered=true" : ""
-    }`;
+    const inviteUrl = `${process.env.CLIENT_URL}/accept-pic-invite?taskId=${taskId}&token=${inviteToken}`;
 
     await sendTaskPicInvitationEmail({
       to: picEmail,
@@ -323,21 +342,22 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
       projectName: project.nama,
       workspaceName: workspace.nama,
       inviteUrl,
-      isRegistered,
+      isRegistered: false,
     });
 
     return {
       success: true,
       invited: true,
-      message: `Undangan PIC dikirim ke ${picEmail}. ${
-        isRegistered
-          ? "User akan otomatis join workspace"
-          : "User perlu register terlebih dahulu"
-      }`,
-      needsRegistration: !isRegistered,
+      message: `Undangan PIC dikirim ke ${picEmail}. User perlu register terlebih dahulu dan akan otomatis mendapat role member`,
+      needsRegistration: true,
     };
   } catch (error) {
-    return handleError(res, error);
+    console.error("Error in handlePicAssignment:", error);
+    return {
+      success: false,
+      status: 500,
+      message: "Terjadi kesalahan saat menambahkan PIC",
+    };
   }
 }
 
@@ -387,13 +407,32 @@ export async function acceptPicInvite(req, res) {
 
     const userId = userResult.user._id;
 
-    await Workspace.findByIdAndUpdate(workspace._id, {
-      $addToSet: { members: userId },
-    });
+    const isMember = workspace.members.some(
+      (m) => m.user.toString() === userId.toString()
+    );
+
+    if (!isMember) {
+      await Workspace.findByIdAndUpdate(workspace._id, {
+        $push: {
+          members: {
+            user: userId,
+            role: "member",
+          },
+        },
+      });
+
+      await User.findByIdAndUpdate(userId, {
+        $push: {
+          workspaces: {
+            workspace: workspace._id,
+            role: "member",
+          },
+        },
+      });
+    }
 
     await User.findByIdAndUpdate(userId, {
       $addToSet: {
-        workspaces: workspace._id,
         assignedTasks: taskId,
       },
     });
@@ -405,11 +444,13 @@ export async function acceptPicInvite(req, res) {
 
     res.status(200).json({
       success: true,
-      message: "Berhasil menjadi PIC task dan bergabung ke workspace",
+      message:
+        "Berhasil menjadi PIC task dan bergabung ke workspace sebagai member",
       data: {
         task: task.nama,
         workspace: workspace.nama,
         pic: userResult.user.username,
+        role: "member",
       },
     });
   } catch (error) {
@@ -528,6 +569,7 @@ export async function verifyPicInvite(req, res) {
         projectName: project.nama,
         workspaceName: workspace.nama,
         expiresAt: validation.inviteData.expiresAt,
+        role: "member", // Info role yang akan didapat
       },
     });
   } catch (error) {

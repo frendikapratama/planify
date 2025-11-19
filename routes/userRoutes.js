@@ -6,7 +6,7 @@ import {
   sendOTP,
   changePassword,
   updateUser,
-  deletUser,
+  deleteUser,
 } from "../controllers/userController.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 
@@ -29,7 +29,7 @@ router.post("/", createUser);
 router.get("/", getUsers);
 router.put("/:id", authenticate, updateUser);
 router.get("/:id", authenticate, getUserById);
-router.delete("/:id", authenticate, deletUser);
+router.delete("/:id", authenticate, deleteUser);
 
 router.post("/forget-password", sendOTP);
 router.post("/change-password", changePassword);

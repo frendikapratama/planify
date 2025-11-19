@@ -17,21 +17,21 @@ router.get("/", authenticate, getWorkspace);
 router.post(
   "/:kuarterId",
   authenticate,
-  authorize("project_manajer", "system_admin"),
+
   createWorkspace
 );
 router.get("/:workspaceId", authenticate, getWorkspaceById);
 router.put(
   "/:workspaceId",
   authenticate,
-  authorize("project_manajer", "system_admin"),
+
   updateWorkspace
 );
-router.delete("/:workspaceId", authorize("system_admin"), deleteWorkspace);
+router.delete("/:workspaceId", authenticate, deleteWorkspace);
 router.post(
   "/:workspaceId/invite",
   authenticate,
-  // authorize("project_manajer", "system_admin"),
+  //
   inviteMemberByEmail
 );
 router.post("/invite/accept", acceptInvite);
