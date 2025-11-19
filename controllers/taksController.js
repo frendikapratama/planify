@@ -12,6 +12,7 @@ import { findOrCreateUser } from "../utils/userUtils.js";
 import { sendTaskPicInvitationEmail } from "../utils/emailUtils.js";
 import { handleError } from "../utils/errorHandler.js";
 import Workspace from "../models/Workspace.js";
+import { createActivity } from "../helpers/activityhelper.js";
 
 export async function getTasksByProjectSimple(req, res) {
   try {
@@ -103,7 +104,7 @@ export async function updateTask(req, res) {
     const { taskId } = req.params;
     const { groupId, position, picEmail, ...updateData } = req.body;
 
-    const oldTask = await Task.findById(taskId).populate("groups");
+    const oldTask = await Task.findById(taskId).populate("groups").lean();
     if (!oldTask) {
       return res.status(404).json({
         success: false,
@@ -167,6 +168,35 @@ export async function updateTask(req, res) {
       new: true,
     }).populate("pic", "username email");
 
+    const before = {};
+    const after = {};
+
+    for (const key in updateData) {
+      const oldValue = oldTask[key];
+      const newValue = updateData[key];
+
+      const oldStr = String(oldValue);
+      const newStr = String(newValue);
+
+      if (oldStr !== newStr) {
+        before[key] = oldValue;
+        after[key] = newValue;
+      }
+    }
+
+    if (Object.keys(before).length > 0) {
+      await createActivity({
+        user: req.user._id,
+        workspace: updatedTask.workspace,
+        project: updatedTask.project,
+        task: taskId,
+        action: "UPDATE_TASK",
+        description: `User mengupdate task "${updatedTask.nama}"`,
+        before,
+        after,
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: "Task updated successfully",
@@ -176,7 +206,6 @@ export async function updateTask(req, res) {
     return handleError(res, error);
   }
 }
-
 export async function updateTaskPositions(req, res) {
   try {
     const { groupId } = req.params;
@@ -189,7 +218,6 @@ export async function updateTaskPositions(req, res) {
       });
     }
 
-    // Validasi bahwa semua tasks ada di group ini
     const tasksInGroup = await Task.find({
       _id: { $in: taskIds },
       groups: groupId,
