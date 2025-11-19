@@ -256,7 +256,6 @@ export const getTasksByGroup = async (req, res) => {
   }
 };
 
-// Function untuk handle assignment PIC
 async function handlePicAssignment(taskId, picEmail, task, requesterId) {
   try {
     const result = await getWorkspaceFromTask(taskId);
@@ -269,7 +268,6 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId) {
     const targetUser = await User.findOne({ email: picEmail });
     const currentTask = await Task.findById(taskId);
 
-    // Cek apakah user sudah menjadi PIC task ini
     if (
       currentTask.pic &&
       currentTask.pic.some(
@@ -282,7 +280,6 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId) {
       };
     }
 
-    // Jika user ada dan terdaftar
     if (targetUser) {
       const isMember = workspace.members.some(
         (m) => m.user.toString() === targetUser._id.toString()
@@ -569,7 +566,7 @@ export async function verifyPicInvite(req, res) {
         projectName: project.nama,
         workspaceName: workspace.nama,
         expiresAt: validation.inviteData.expiresAt,
-        role: "member", // Info role yang akan didapat
+        role: "member",
       },
     });
   } catch (error) {

@@ -175,7 +175,7 @@ export async function deleteWorkspace(req, res) {
 export async function inviteMemberByEmail(req, res) {
   try {
     const { workspaceId } = req.params;
-    const { email, role = "member" } = req.body; // Tambah role parameter
+    const { email, role = "member" } = req.body;
     const requesterId = req.user._id;
 
     const workspace = await Workspace.findById(workspaceId).populate(
@@ -195,7 +195,6 @@ export async function inviteMemberByEmail(req, res) {
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      // Cek apakah user sudah member
       const isMember = workspace.members.some(
         (m) => m.user.toString() === existingUser._id.toString()
       );
@@ -206,7 +205,6 @@ export async function inviteMemberByEmail(req, res) {
           .json({ message: "User sudah menjadi anggota workspace" });
       }
 
-      // Tambahkan ke workspace dengan role
       await Workspace.findByIdAndUpdate(workspaceId, {
         $push: {
           members: {
@@ -216,7 +214,6 @@ export async function inviteMemberByEmail(req, res) {
         },
       });
 
-      // Tambahkan ke user dengan role
       await User.findByIdAndUpdate(existingUser._id, {
         $push: {
           workspaces: {
@@ -302,7 +299,6 @@ export async function acceptInvite(req, res) {
 
     const userId = userResult.user._id;
 
-    // Cek apakah user sudah member
     const isMember = workspace.members.some(
       (m) => m.user.toString() === userId.toString()
     );
@@ -311,7 +307,6 @@ export async function acceptInvite(req, res) {
       return res.status(400).json({ message: "User sudah menjadi member" });
     }
 
-    // Tambahkan ke workspace dengan role
     await Workspace.findByIdAndUpdate(
       workspace._id,
       {
@@ -326,7 +321,6 @@ export async function acceptInvite(req, res) {
       { new: true }
     );
 
-    // Tambahkan ke user dengan role
     await User.findByIdAndUpdate(userId, {
       $push: {
         workspaces: {
@@ -362,13 +356,11 @@ export async function updateMemberRole(req, res) {
         .json({ message: "Hanya owner yang dapat mengubah role" });
     }
 
-    // Update role di workspace
     await Workspace.findOneAndUpdate(
       { _id: workspaceId, "members.user": userId },
       { $set: { "members.$.role": role } }
     );
 
-    // Update role di user
     await User.findOneAndUpdate(
       { _id: userId, "workspaces.workspace": workspaceId },
       { $set: { "workspaces.$.role": role } }
@@ -399,12 +391,10 @@ export async function removeMember(req, res) {
         .json({ message: "Hanya owner yang dapat menghapus member" });
     }
 
-    // Hapus dari workspace
     await Workspace.findByIdAndUpdate(workspaceId, {
       $pull: { members: { user: userId } },
     });
 
-    // Hapus dari user
     await User.findByIdAndUpdate(userId, {
       $pull: { workspaces: { workspace: workspaceId } },
     });
