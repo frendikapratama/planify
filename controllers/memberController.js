@@ -8,7 +8,7 @@ export async function getMemberWorkspace(req, res) {
 
     const workspace = await Workspace.findById(workspaceId)
       .populate("owner", "username email role")
-      .populate("members", "username email role");
+      .populate("members.user", "username email departemen divisi posisi");
 
     if (!workspace) {
       return res.status(404).json({ message: "Workspace not found" });

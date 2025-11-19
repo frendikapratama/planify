@@ -42,9 +42,10 @@ export async function getWorkspaceById(req, res) {
         select: "username email",
       })
       .populate({
-        path: "members",
+        path: "members.user",
         select: "username email",
       });
+
     res.status(200).json({
       success: true,
       message: "successfully fetched workspace",
@@ -66,16 +67,32 @@ export async function createWorkspace(req, res) {
         message: "kuarter not found",
       });
     }
+
     const newWorkspace = await Workspace.create({
       nama: req.body.nama,
       owner: req.user._id,
-      members: [req.user._id],
+      members: [
+        {
+          user: req.user._id,
+          role: "admin", // Owner otomatis jadi admin
+        },
+      ],
       kuarter: kuarterId,
     });
 
     await Kuarter.findByIdAndUpdate(kuarterId, {
       $push: { workspace: newWorkspace._id },
     });
+
+    await User.findByIdAndUpdate(req.user._id, {
+      $push: {
+        workspaces: {
+          workspace: newWorkspace._id,
+          role: "admin",
+        },
+      },
+    });
+
     res.status(201).json({
       success: true,
       message: "Workspace created successfully",
@@ -131,6 +148,12 @@ export async function deleteWorkspace(req, res) {
 
     await Project.deleteMany({ workspace: workspaceId });
 
+    // Hapus workspace dari user's workspaces array
+    await User.updateMany(
+      { "workspaces.workspace": workspaceId },
+      { $pull: { workspaces: { workspace: workspaceId } } }
+    );
+
     const deletedWorkspace = await Workspace.findByIdAndDelete(workspaceId);
 
     if (!deletedWorkspace) {
@@ -152,7 +175,7 @@ export async function deleteWorkspace(req, res) {
 export async function inviteMemberByEmail(req, res) {
   try {
     const { workspaceId } = req.params;
-    const { email } = req.body;
+    const { email, role = "member" } = req.body;
     const requesterId = req.user._id;
 
     const workspace = await Workspace.findById(workspaceId).populate(
@@ -172,21 +195,35 @@ export async function inviteMemberByEmail(req, res) {
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      if (workspace.members.includes(existingUser._id)) {
+      const isMember = workspace.members.some(
+        (m) => m.user.toString() === existingUser._id.toString()
+      );
+
+      if (isMember) {
         return res
           .status(400)
           .json({ message: "User sudah menjadi anggota workspace" });
       }
 
       await Workspace.findByIdAndUpdate(workspaceId, {
-        $addToSet: { members: existingUser._id },
+        $push: {
+          members: {
+            user: existingUser._id,
+            role: role,
+          },
+        },
       });
 
       await User.findByIdAndUpdate(existingUser._id, {
-        $addToSet: { workspaces: workspaceId },
+        $push: {
+          workspaces: {
+            workspace: workspaceId,
+            role: role,
+          },
+        },
       });
 
-      console.log(`✅ ${email} langsung ditambahkan sebagai member`);
+      console.log(`✅ ${email} langsung ditambahkan sebagai ${role}`);
       return res.status(200).json({
         success: true,
         message: "User sudah terdaftar dan ditambahkan ke workspace",
@@ -197,7 +234,7 @@ export async function inviteMemberByEmail(req, res) {
 
     await Workspace.findByIdAndUpdate(workspaceId, {
       $push: {
-        pendingInvites: createInviteObject(email, inviteToken),
+        pendingInvites: createInviteObject(email, inviteToken, { role }),
       },
     });
 
@@ -208,6 +245,7 @@ export async function inviteMemberByEmail(req, res) {
       workspaceName: workspace.nama,
       inviteUrl,
       inviterName: workspace.owner.username,
+      role,
     });
 
     res.status(200).json({
@@ -246,6 +284,7 @@ export async function acceptInvite(req, res) {
     }
 
     const invitedEmail = validation.inviteData.email;
+    const invitedRole = validation.inviteData.role || "member";
 
     const userResult = await findOrCreateUser(invitedEmail, {
       username,
@@ -260,25 +299,109 @@ export async function acceptInvite(req, res) {
 
     const userId = userResult.user._id;
 
-    if (workspace.members.includes(userId)) {
+    const isMember = workspace.members.some(
+      (m) => m.user.toString() === userId.toString()
+    );
+
+    if (isMember) {
       return res.status(400).json({ message: "User sudah menjadi member" });
     }
+
     await Workspace.findByIdAndUpdate(
       workspace._id,
       {
-        $addToSet: { members: userId },
+        $push: {
+          members: {
+            user: userId,
+            role: invitedRole,
+          },
+        },
         $pull: { pendingInvites: { token: token } },
       },
       { new: true }
     );
 
     await User.findByIdAndUpdate(userId, {
-      $addToSet: { workspaces: workspace._id },
+      $push: {
+        workspaces: {
+          workspace: workspace._id,
+          role: invitedRole,
+        },
+      },
     });
 
     return res.status(200).json({
       success: true,
       message: "Berhasil bergabung ke workspace",
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+export async function updateMemberRole(req, res) {
+  try {
+    const { workspaceId, userId } = req.params;
+    const { role } = req.body;
+    const requesterId = req.user._id;
+
+    const workspace = await Workspace.findById(workspaceId);
+
+    if (!workspace)
+      return res.status(404).json({ message: "Workspace tidak ditemukan" });
+
+    if (workspace.owner.toString() !== requesterId.toString()) {
+      return res
+        .status(403)
+        .json({ message: "Hanya owner yang dapat mengubah role" });
+    }
+
+    await Workspace.findOneAndUpdate(
+      { _id: workspaceId, "members.user": userId },
+      { $set: { "members.$.role": role } }
+    );
+
+    await User.findOneAndUpdate(
+      { _id: userId, "workspaces.workspace": workspaceId },
+      { $set: { "workspaces.$.role": role } }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Role berhasil diupdate",
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
+
+export async function removeMember(req, res) {
+  try {
+    const { workspaceId, userId } = req.params;
+    const requesterId = req.user._id;
+
+    const workspace = await Workspace.findById(workspaceId);
+
+    if (!workspace)
+      return res.status(404).json({ message: "Workspace tidak ditemukan" });
+
+    if (workspace.owner.toString() !== requesterId.toString()) {
+      return res
+        .status(403)
+        .json({ message: "Hanya owner yang dapat menghapus member" });
+    }
+
+    await Workspace.findByIdAndUpdate(workspaceId, {
+      $pull: { members: { user: userId } },
+    });
+
+    await User.findByIdAndUpdate(userId, {
+      $pull: { workspaces: { workspace: workspaceId } },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Member berhasil dihapus",
     });
   } catch (error) {
     return handleError(res, error);

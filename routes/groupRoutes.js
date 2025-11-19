@@ -6,12 +6,31 @@ import {
   updateGroup,
   deleteGroup,
 } from "../controllers/groupController.js";
-
+import {
+  authenticate,
+  checkWorkspaceRoleFromGroup,
+  checkWorkspaceRoleFromProject,
+} from "../middleware/auth.js";
 const router = express.Router();
 
-router.get("/", getGroup);
-router.post("/:projectId", createGroup);
-router.put("/:groupId", updateGroup);
-router.delete("/:groupId", deleteGroup);
+router.get("/", authenticate, checkWorkspaceRoleFromGroup([]), getGroup);
+router.post(
+  "/:projectId",
+  authenticate,
+  checkWorkspaceRoleFromProject(["project_manager", "admin", "member"]),
+  createGroup
+);
+router.put(
+  "/:groupId",
+  authenticate,
+  checkWorkspaceRoleFromGroup([]),
+  updateGroup
+);
+router.delete(
+  "/:groupId",
+  authenticate,
+  checkWorkspaceRoleFromGroup(["project_manager", "admin"]),
+  deleteGroup
+);
 
 export default router;

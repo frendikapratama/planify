@@ -12,6 +12,7 @@ import { findOrCreateUser } from "../utils/userUtils.js";
 import { sendTaskPicInvitationEmail } from "../utils/emailUtils.js";
 import { handleError } from "../utils/errorHandler.js";
 import Workspace from "../models/Workspace.js";
+import { createActivity } from "../helpers/activityhelper.js";
 
 export async function getTasksByProjectSimple(req, res) {
   try {
@@ -103,7 +104,7 @@ export async function updateTask(req, res) {
     const { taskId } = req.params;
     const { groupId, position, picEmail, ...updateData } = req.body;
 
-    const oldTask = await Task.findById(taskId).populate("groups");
+    const oldTask = await Task.findById(taskId).populate("groups").lean();
     if (!oldTask) {
       return res.status(404).json({
         success: false,
@@ -167,6 +168,35 @@ export async function updateTask(req, res) {
       new: true,
     }).populate("pic", "username email");
 
+    const before = {};
+    const after = {};
+
+    for (const key in updateData) {
+      const oldValue = oldTask[key];
+      const newValue = updateData[key];
+
+      const oldStr = String(oldValue);
+      const newStr = String(newValue);
+
+      if (oldStr !== newStr) {
+        before[key] = oldValue;
+        after[key] = newValue;
+      }
+    }
+
+    if (Object.keys(before).length > 0) {
+      await createActivity({
+        user: req.user._id,
+        workspace: updatedTask.workspace,
+        project: updatedTask.project,
+        task: taskId,
+        action: "UPDATE_TASK",
+        description: `User mengupdate task "${updatedTask.nama}"`,
+        before,
+        after,
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: "Task updated successfully",
@@ -176,9 +206,9 @@ export async function updateTask(req, res) {
     return handleError(res, error);
   }
 }
-
 export async function updateTaskPositions(req, res) {
   try {
+    const { groupId } = req.params;
     const { taskIds } = req.body;
 
     if (!Array.isArray(taskIds) || taskIds.length === 0) {
@@ -188,8 +218,20 @@ export async function updateTaskPositions(req, res) {
       });
     }
 
-    const updatePromises = taskIds.map((taskId, index) =>
-      Task.findByIdAndUpdate(taskId, { position: index }, { new: true })
+    const tasksInGroup = await Task.find({
+      _id: { $in: taskIds },
+      groups: groupId,
+    });
+
+    if (tasksInGroup.length !== taskIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Beberapa task tidak ada di group ini",
+      });
+    }
+
+    const updatePromises = taskIds.map((id, index) =>
+      Task.findByIdAndUpdate(id, { position: index }, { new: true })
     );
 
     const updatedTasks = await Promise.all(updatePromises);
@@ -256,7 +298,7 @@ export const getTasksByGroup = async (req, res) => {
   }
 };
 
-async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
+async function handlePicAssignment(taskId, picEmail, task, requesterId) {
   try {
     const result = await getWorkspaceFromTask(taskId);
     if (!result.success) {
@@ -280,12 +322,31 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
       };
     }
 
-    if (
-      targetUser &&
-      workspace.members.some(
-        (m) => m._id.toString() === targetUser._id.toString()
-      )
-    ) {
+    if (targetUser) {
+      const isMember = workspace.members.some(
+        (m) => m.user.toString() === targetUser._id.toString()
+      );
+
+      if (!isMember) {
+        await Workspace.findByIdAndUpdate(workspace._id, {
+          $push: {
+            members: {
+              user: targetUser._id,
+              role: "member",
+            },
+          },
+        });
+
+        await User.findByIdAndUpdate(targetUser._id, {
+          $push: {
+            workspaces: {
+              workspace: workspace._id,
+              role: "member",
+            },
+          },
+        });
+      }
+
       await Task.findByIdAndUpdate(taskId, {
         $addToSet: { pic: targetUser._id },
       });
@@ -297,7 +358,9 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
 
       return {
         success: true,
-        message: `${picEmail} berhasil ditambahkan sebagai PIC`,
+        message: `${picEmail} berhasil ditambahkan sebagai PIC${
+          !isMember ? " dan bergabung ke workspace sebagai member" : ""
+        }`,
       };
     }
 
@@ -310,12 +373,7 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
       $push: { pendingPicInvites: inviteObject },
     });
 
-    const isRegistered = !!targetUser;
-    const inviteUrl = `${
-      process.env.CLIENT_URL
-    }/accept-pic-invite?taskId=${taskId}&token=${inviteToken}${
-      isRegistered ? "&registered=true" : ""
-    }`;
+    const inviteUrl = `${process.env.CLIENT_URL}/accept-pic-invite?taskId=${taskId}&token=${inviteToken}`;
 
     await sendTaskPicInvitationEmail({
       to: picEmail,
@@ -323,21 +381,22 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId, res) {
       projectName: project.nama,
       workspaceName: workspace.nama,
       inviteUrl,
-      isRegistered,
+      isRegistered: false,
     });
 
     return {
       success: true,
       invited: true,
-      message: `Undangan PIC dikirim ke ${picEmail}. ${
-        isRegistered
-          ? "User akan otomatis join workspace"
-          : "User perlu register terlebih dahulu"
-      }`,
-      needsRegistration: !isRegistered,
+      message: `Undangan PIC dikirim ke ${picEmail}. User perlu register terlebih dahulu dan akan otomatis mendapat role member`,
+      needsRegistration: true,
     };
   } catch (error) {
-    return handleError(res, error);
+    console.error("Error in handlePicAssignment:", error);
+    return {
+      success: false,
+      status: 500,
+      message: "Terjadi kesalahan saat menambahkan PIC",
+    };
   }
 }
 
@@ -387,13 +446,32 @@ export async function acceptPicInvite(req, res) {
 
     const userId = userResult.user._id;
 
-    await Workspace.findByIdAndUpdate(workspace._id, {
-      $addToSet: { members: userId },
-    });
+    const isMember = workspace.members.some(
+      (m) => m.user.toString() === userId.toString()
+    );
+
+    if (!isMember) {
+      await Workspace.findByIdAndUpdate(workspace._id, {
+        $push: {
+          members: {
+            user: userId,
+            role: "member",
+          },
+        },
+      });
+
+      await User.findByIdAndUpdate(userId, {
+        $push: {
+          workspaces: {
+            workspace: workspace._id,
+            role: "member",
+          },
+        },
+      });
+    }
 
     await User.findByIdAndUpdate(userId, {
       $addToSet: {
-        workspaces: workspace._id,
         assignedTasks: taskId,
       },
     });
@@ -405,11 +483,13 @@ export async function acceptPicInvite(req, res) {
 
     res.status(200).json({
       success: true,
-      message: "Berhasil menjadi PIC task dan bergabung ke workspace",
+      message:
+        "Berhasil menjadi PIC task dan bergabung ke workspace sebagai member",
       data: {
         task: task.nama,
         workspace: workspace.nama,
         pic: userResult.user.username,
+        role: "member",
       },
     });
   } catch (error) {
@@ -528,6 +608,7 @@ export async function verifyPicInvite(req, res) {
         projectName: project.nama,
         workspaceName: workspace.nama,
         expiresAt: validation.inviteData.expiresAt,
+        role: "member",
       },
     });
   } catch (error) {

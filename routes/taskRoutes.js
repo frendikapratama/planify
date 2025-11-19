@@ -14,20 +14,54 @@ import {
 } from "../controllers/taksController.js";
 import {
   authenticate,
-  checkWorkspaceMemberFromTask,
-  checkWorkspaceMemberFromGroup,
+  checkWorkspaceRoleFromTask,
+  checkWorkspaceRoleFromGroup,
 } from "../middleware/auth.js";
 const router = express.Router();
 
-router.get("/", getTask);
-router.get("/ByGroup", getTasksByGroup);
-router.post("/:groupId", createTask);
-router.put("/positions", updateTaskPositions);
-router.put("/:taskId", authenticate, checkWorkspaceMemberFromTask, updateTask);
-router.delete("/:taskId", deleteTask);
-router.post("/:taskId/accept-pic-invite", acceptPicInvite);
-router.delete("/:taskId/pic", authenticate, removePic);
-router.delete("/:taskId/pic/all", authenticate, removeAllPics);
+router.get("/", authenticate, getTask);
+router.get("/ByGroup", authenticate, getTasksByGroup);
+router.post(
+  "/:groupId",
+  checkWorkspaceRoleFromTask(["admin", "project_manager", "member"]),
+  createTask
+);
+router.put(
+  "/positions/:groupId",
+  authenticate,
+  checkWorkspaceRoleFromGroup(["admin", "project_manager", "member"]),
+  updateTaskPositions
+);
+router.put(
+  "/:taskId",
+  authenticate,
+  checkWorkspaceRoleFromTask(["admin", "project_manager", "member"]),
+  updateTask
+);
+router.delete(
+  "/:taskId",
+  authenticate,
+  checkWorkspaceRoleFromTask(["admin", "project_manager"]),
+  deleteTask
+);
+router.post(
+  "/:taskId/accept-pic-invite",
+  authenticate,
+  checkWorkspaceRoleFromTask(["admin", "project_manager", "member"]),
+  acceptPicInvite
+);
+router.delete(
+  "/:taskId/pic",
+  authenticate,
+  checkWorkspaceRoleFromTask(["admin", "project_manager"]),
+  removePic
+);
+router.delete(
+  "/:taskId/pic/all",
+  authenticate,
+  checkWorkspaceRoleFromTask(["admin", "project_manager"]),
+  removeAllPics
+);
 router.get("/:taskId/verify-invite", verifyPicInvite);
 router.get("/:projectId", getTasksByProjectSimple);
 // Attachment routes

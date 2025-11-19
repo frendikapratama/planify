@@ -8,10 +8,10 @@ import { authenticate } from "../middleware/auth.js";
 
 const router = express.Router();
 router.use(authenticate);
-router.post("/:taskId", createComment);
+router.post("/:taskId", authenticate, createComment);
 
-router.post("/:taskId/reply/:commentId", replyComment);
+router.post("/:taskId/reply/:commentId", authenticate, replyComment);
 
-router.get("/:taskId", getComments);
+router.get("/:taskId", authenticate, getComments);
 
 export default router;
