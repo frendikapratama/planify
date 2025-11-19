@@ -30,16 +30,30 @@ export async function authenticate(req, res, next) {
   }
 }
 
-export function authorize(...roles) {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "User tidak terautentikasi" });
-    }
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ message: "Tidak punya akses" });
-    }
-    next();
-  };
+// export function authorize(...roles) {
+//   return (req, res, next) => {
+//     if (!req.user) {
+//       return res.status(401).json({ message: "User tidak terautentikasi" });
+//     }
+//     if (!roles.includes(req.user.role)) {
+//       return res.status(403).json({ message: "Tidak punya akses" });
+//     }
+//     next();
+//   };
+// }
+
+export function requireSystemAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ message: "User tidak terautentikasi" });
+  }
+
+  if (req.user.role !== "system_admin" && req.user.isSystemAdmin !== true) {
+    return res.status(403).json({
+      message: "Hanya system admin yang dapat mengakses fitur ini",
+    });
+  }
+
+  next();
 }
 
 export function checkWorkspaceRole(allowedRoles = []) {

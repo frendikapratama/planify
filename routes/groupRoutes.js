@@ -6,12 +6,12 @@ import {
   updateGroup,
   deleteGroup,
 } from "../controllers/groupController.js";
-
+import { authenticate } from "../middleware/auth.js";
 const router = express.Router();
 
-router.get("/", getGroup);
-router.post("/:projectId", createGroup);
-router.put("/:groupId", updateGroup);
-router.delete("/:groupId", deleteGroup);
+router.get("/", authenticate, getGroup);
+router.post("/:projectId", authenticate, createGroup);
+router.put("/:groupId", authenticate, updateGroup);
+router.delete("/:groupId", authenticate, deleteGroup);
 
 export default router;

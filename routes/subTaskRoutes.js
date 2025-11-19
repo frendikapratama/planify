@@ -10,17 +10,45 @@ import {
   removeSubtaskPic,
   verifySubtaskPicInvite,
 } from "../controllers/subTaskController.js";
-import { authenticate } from "../middleware/auth.js";
+import {
+  authenticate,
+  checkWorkspaceRoleFromSubtask,
+} from "../middleware/auth.js";
 const router = express.Router();
 
 router.get("/", authenticate, getSubTask);
 router.get("/ByTask", authenticate, getByTask);
-router.patch("/:taskId", authenticate, positionSubTask);
-router.post("/:taskId", authenticate, createSubTask);
-router.put("/:subTaskId", authenticate, updateSubTask);
-router.delete("/:subTaskId", authenticate, deleteSubTask);
+router.patch(
+  "/:taskId",
+  authenticate,
+  checkWorkspaceRoleFromSubtask(["admin", "project_manager", "member"]),
+  positionSubTask
+);
+router.post(
+  "/:taskId",
+  authenticate,
+  checkWorkspaceRoleFromSubtask(["admin", "project_manager", "member"]),
+  createSubTask
+);
+router.put(
+  "/:subTaskId",
+  authenticate,
+  checkWorkspaceRoleFromSubtask(["admin", "project_manager", "member"]),
+  updateSubTask
+);
+router.delete(
+  "/:subTaskId",
+  authenticate,
+  checkWorkspaceRoleFromSubtask(["admin", "project_manager", "member"]),
+  deleteSubTask
+);
 
+router.delete(
+  "/:subTaskId/pic",
+  authenticate,
+  checkWorkspaceRoleFromSubtask(["admin", "project_manager", "member"]),
+  removeSubtaskPic
+);
 router.post("/:subTaskId/accept-pic-invite", acceptSubtaskPicInvite);
-router.delete("/:subTaskId/pic", authenticate, removeSubtaskPic);
 router.get("/:subTaskId/verify-invite", verifySubtaskPicInvite);
 export default router;
