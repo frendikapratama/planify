@@ -179,6 +179,7 @@ export async function updateTask(req, res) {
 
 export async function updateTaskPositions(req, res) {
   try {
+    const { groupId } = req.params;
     const { taskIds } = req.body;
 
     if (!Array.isArray(taskIds) || taskIds.length === 0) {
@@ -188,8 +189,21 @@ export async function updateTaskPositions(req, res) {
       });
     }
 
-    const updatePromises = taskIds.map((taskId, index) =>
-      Task.findByIdAndUpdate(taskId, { position: index }, { new: true })
+    // Validasi bahwa semua tasks ada di group ini
+    const tasksInGroup = await Task.find({
+      _id: { $in: taskIds },
+      groups: groupId,
+    });
+
+    if (tasksInGroup.length !== taskIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Beberapa task tidak ada di group ini",
+      });
+    }
+
+    const updatePromises = taskIds.map((id, index) =>
+      Task.findByIdAndUpdate(id, { position: index }, { new: true })
     );
 
     const updatedTasks = await Promise.all(updatePromises);

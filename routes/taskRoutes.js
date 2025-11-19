@@ -15,6 +15,7 @@ import {
 import {
   authenticate,
   checkWorkspaceRoleFromTask,
+  checkWorkspaceRoleFromGroup,
 } from "../middleware/auth.js";
 const router = express.Router();
 
@@ -26,8 +27,9 @@ router.post(
   createTask
 );
 router.put(
-  "/positions",
-  checkWorkspaceRoleFromTask(["admin", "project_manager", "member"]),
+  "/positions/:groupId",
+  authenticate,
+  checkWorkspaceRoleFromGroup(["admin", "project_manager", "member"]),
   updateTaskPositions
 );
 router.put(
@@ -45,7 +47,7 @@ router.delete(
 router.post(
   "/:taskId/accept-pic-invite",
   authenticate,
-  checkWorkspaceRoleFromTask(["admin", "project_manager"]),
+  checkWorkspaceRoleFromTask(["admin", "project_manager", "member"]),
   acceptPicInvite
 );
 router.delete(

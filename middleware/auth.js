@@ -4,6 +4,7 @@ import Group from "../models/Group.js";
 import Task from "../models/Task.js";
 import Project from "../models/Project.js";
 import Workspace from "../models/Workspace.js";
+import Subtask from "../models/Subtask.js";
 
 export async function authenticate(req, res, next) {
   try {
@@ -201,101 +202,6 @@ export function checkWorkspaceRoleFromProject(allowedRoles = []) {
   };
 }
 
-export function checkWorkspaceRoleFromGroup(allowedRoles = []) {
-  return async (req, res, next) => {
-    try {
-      const { groupId } = req.params;
-      const userId = req.user._id;
-
-      if (req.user.isSystemAdmin === true) {
-        req.userWorkspaceRole = "system_admin";
-        req.isSystemAdmin = true;
-
-        const group = await Group.findById(groupId);
-        if (!group) {
-          return res.status(404).json({
-            success: false,
-            message: "Group tidak ditemukan",
-          });
-        }
-
-        const project = await Project.findById(group.project).populate(
-          "workspace"
-        );
-        if (!project || !project.workspace) {
-          return res.status(404).json({
-            success: false,
-            message: "Project atau Workspace tidak ditemukan",
-          });
-        }
-
-        req.workspace = project.workspace;
-        req.group = group;
-        return next();
-      }
-
-      const group = await Group.findById(groupId);
-      if (!group) {
-        return res.status(404).json({
-          success: false,
-          message: "Group tidak ditemukan",
-        });
-      }
-
-      const project = await Project.findById(group.project).populate(
-        "workspace"
-      );
-      if (!project || !project.workspace) {
-        return res.status(404).json({
-          success: false,
-          message: "Project atau Workspace tidak ditemukan",
-        });
-      }
-
-      const workspace = project.workspace;
-
-      if (workspace.owner.toString() === userId.toString()) {
-        req.userWorkspaceRole = "admin";
-        req.workspace = workspace;
-        req.group = group;
-        return next();
-      }
-
-      const member = workspace.members.find(
-        (m) => m.user.toString() === userId.toString()
-      );
-
-      if (!member) {
-        return res.status(403).json({
-          success: false,
-          message: "Anda bukan member workspace ini",
-        });
-      }
-
-      req.userWorkspaceRole = member.role;
-      req.workspace = workspace;
-      req.group = group;
-
-      if (allowedRoles.length > 0 && !allowedRoles.includes(member.role)) {
-        return res.status(403).json({
-          success: false,
-          message: `Aksi ini memerlukan role: ${allowedRoles.join(
-            " atau "
-          )}. Role Anda: ${member.role}`,
-        });
-      }
-
-      next();
-    } catch (error) {
-      return res.status(500).json({
-        success: false,
-        message: "Gagal memverifikasi role workspace",
-        error: error.message,
-      });
-    }
-  };
-}
-
 export function checkWorkspaceRoleFromTask(allowedRoles = []) {
   return async (req, res, next) => {
     try {
@@ -410,15 +316,14 @@ export function checkWorkspaceRoleFromTask(allowedRoles = []) {
 export function checkWorkspaceRoleFromSubtask(allowedRoles = []) {
   return async (req, res, next) => {
     try {
-      const { subtaskId } = req.params;
+      const { subTaskId } = req.params;
       const userId = req.user._id;
 
       if (req.user.isSystemAdmin === true) {
         req.userWorkspaceRole = "system_admin";
         req.isSystemAdmin = true;
 
-        const Subtask = (await import("../models/Subtask.js")).default;
-        const subtask = await Subtask.findById(subtaskId);
+        const subtask = await Subtask.findById(subTaskId);
         if (!subtask) {
           return res.status(404).json({
             success: false,
@@ -458,7 +363,7 @@ export function checkWorkspaceRoleFromSubtask(allowedRoles = []) {
       }
 
       const Subtask = (await import("../models/Subtask.js")).default;
-      const subtask = await Subtask.findById(subtaskId);
+      const subtask = await Subtask.findById(subTaskId);
       if (!subtask) {
         return res.status(404).json({
           success: false,
@@ -607,12 +512,40 @@ export async function checkWorkspaceMemberFromTask(req, res, next) {
   }
 }
 
-export async function checkWorkspaceMemberFromGroup(req, res, next) {
-  try {
-    const { groupId } = req.params;
-    const userId = req.user._id;
+export function checkWorkspaceRoleFromGroup(allowedRoles = []) {
+  return async (req, res, next) => {
+    try {
+      const { groupId } = req.params || req.body;
+      const userId = req.user._id;
 
-    if (req.user.isSystemAdmin === true) {
+      // System Admin Bypass
+      if (req.user.isSystemAdmin === true) {
+        req.userWorkspaceRole = "system_admin";
+        req.isSystemAdmin = true;
+
+        const group = await Group.findById(groupId);
+        if (!group) {
+          return res.status(404).json({
+            success: false,
+            message: "Group tidak ditemukan",
+          });
+        }
+
+        const project = await Project.findById(group.project).populate(
+          "workspace"
+        );
+        if (!project || !project.workspace) {
+          return res.status(404).json({
+            success: false,
+            message: "Project atau Workspace tidak ditemukan",
+          });
+        }
+
+        req.workspace = project.workspace;
+        req.group = group;
+        return next();
+      }
+
       const group = await Group.findById(groupId);
       if (!group) {
         return res.status(404).json({
@@ -620,52 +553,60 @@ export async function checkWorkspaceMemberFromGroup(req, res, next) {
           message: "Group tidak ditemukan",
         });
       }
+
       const project = await Project.findById(group.project).populate(
         "workspace"
       );
-      req.group = group;
-      req.workspace = project.workspace;
-      req.isSystemAdmin = true;
-      return next();
-    }
+      if (!project || !project.workspace) {
+        return res.status(404).json({
+          success: false,
+          message: "Project atau Workspace tidak ditemukan",
+        });
+      }
 
-    const group = await Group.findById(groupId);
-    if (!group) {
-      return res.status(404).json({
+      const workspace = project.workspace;
+
+      // Cek owner
+      if (workspace.owner.toString() === userId.toString()) {
+        req.userWorkspaceRole = "admin";
+        req.workspace = workspace;
+        req.group = group;
+        return next();
+      }
+
+      // Cari role user
+      const member = workspace.members.find(
+        (m) => m.user.toString() === userId.toString()
+      );
+
+      if (!member) {
+        return res.status(403).json({
+          success: false,
+          message: "Anda bukan member workspace ini",
+        });
+      }
+
+      req.userWorkspaceRole = member.role;
+      req.workspace = workspace;
+      req.group = group;
+
+      // Cek role
+      if (allowedRoles.length > 0 && !allowedRoles.includes(member.role)) {
+        return res.status(403).json({
+          success: false,
+          message: `Aksi ini memerlukan role: ${allowedRoles.join(
+            " atau "
+          )}. Role Anda: ${member.role}`,
+        });
+      }
+
+      next();
+    } catch (error) {
+      return res.status(500).json({
         success: false,
-        message: "Group tidak ditemukan",
+        message: "Gagal memverifikasi role workspace",
+        error: error.message,
       });
     }
-    const project = await Project.findById(group.project).populate("workspace");
-    if (!project) {
-      return res.status(404).json({
-        success: false,
-        message: "Project tidak ditemukan",
-      });
-    }
-    if (!project.workspace) {
-      return res.status(404).json({
-        success: false,
-        message: "Workspace tidak ditemukan",
-      });
-    }
-    const isMember = project.workspace.members.some(
-      (member) => member.user.toString() === userId.toString()
-    );
-    if (!isMember) {
-      return res.status(403).json({
-        success: false,
-        message: "Anda bukan member dari workspace ini",
-      });
-    }
-    req.group = group;
-    req.workspace = project.workspace;
-    next();
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Gagal memverifikasi akses workspace",
-      error: error.message,
-    });
-  }
+  };
 }

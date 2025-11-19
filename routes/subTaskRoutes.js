@@ -13,6 +13,7 @@ import {
 import {
   authenticate,
   checkWorkspaceRoleFromSubtask,
+  checkWorkspaceRoleFromTask,
 } from "../middleware/auth.js";
 const router = express.Router();
 
@@ -21,13 +22,13 @@ router.get("/ByTask", authenticate, getByTask);
 router.patch(
   "/:taskId",
   authenticate,
-  checkWorkspaceRoleFromSubtask(["admin", "project_manager", "member"]),
+  checkWorkspaceRoleFromTask(["admin", "project_manager", "member"]),
   positionSubTask
 );
 router.post(
   "/:taskId",
   authenticate,
-  checkWorkspaceRoleFromSubtask(["admin", "project_manager", "member"]),
+  checkWorkspaceRoleFromTask(["admin", "project_manager", "member"]),
   createSubTask
 );
 router.put(
