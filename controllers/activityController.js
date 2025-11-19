@@ -1,20 +1,5 @@
 import Activity from "../models/Activity.js";
 
-export async function getActivityByProject(req, res) {
-  try {
-    const { projectId } = req.params;
-
-    const logs = await Activity.find({ project: projectId })
-      .populate("user", "username email")
-      .populate("task", "nama")
-      .sort({ createdAt: -1 });
-
-    res.status(200).json({ success: true, logs });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-}
-
 export async function getAllActivity(req, res) {
   try {
     const logs = await Activity.find()
@@ -41,5 +26,49 @@ export async function getActivityByUser(req, res) {
     res.status(200).json({ success: true, logs });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+export async function getActivityByGroup(req, res) {
+  try {
+    const { groupId } = req.params;
+
+    const logs = await Activity.find({ group: groupId })
+      .populate("user", "username email")
+      .populate("group", "nama")
+      .populate("task", "nama")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      logs,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+}
+
+export async function getActivityByProject(req, res) {
+  try {
+    const { projectId } = req.params;
+
+    const logs = await Activity.find({ project: projectId })
+      .populate("user", "username email")
+      .populate("group", "nama")
+      .populate("task", "nama")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      logs,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
   }
 }

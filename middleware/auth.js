@@ -362,7 +362,6 @@ export function checkWorkspaceRoleFromSubtask(allowedRoles = []) {
         return next();
       }
 
-      const Subtask = (await import("../models/Subtask.js")).default;
       const subtask = await Subtask.findById(subTaskId);
       if (!subtask) {
         return res.status(404).json({

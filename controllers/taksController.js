@@ -185,13 +185,15 @@ export async function updateTask(req, res) {
     }
 
     if (Object.keys(before).length > 0) {
+      const group = await Group.findById(updatedTask.groups);
       await createActivity({
         user: req.user._id,
         workspace: updatedTask.workspace,
-        project: updatedTask.project,
+        project: group.project,
+        group: updatedTask.groups,
         task: taskId,
         action: "UPDATE_TASK",
-        description: `User mengupdate task "${updatedTask.nama}"`,
+        description: `User mengupdate task ${updatedTask.nama}`,
         before,
         after,
       });
