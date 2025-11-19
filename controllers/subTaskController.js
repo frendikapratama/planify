@@ -8,8 +8,10 @@ import {
   generateInviteToken,
   createInviteObject,
 } from "../utils/inviteUtils.js";
-import { findOrCreateUser, addUserToWorkspace } from "../utils/userUtils.js";
+import { findOrCreateUser } from "../utils/userUtils.js";
 import { sendSubtaskPicInvitationEmail } from "../utils/emailUtils.js";
+import Workspace from "../models/Workspace.js";
+
 export async function getSubTask(req, res) {
   try {
     const data = await Subtask.find()
@@ -135,6 +137,7 @@ async function handleSubtaskPicAssignment(
         message: "User sudah menjadi PIC subtask ini",
       };
     }
+
     if (
       targetUser &&
       workspace.members.some(
@@ -145,17 +148,15 @@ async function handleSubtaskPicAssignment(
         $addToSet: { pic: targetUser._id },
       });
 
-      if (!targetUser.assignedSubtasks.includes(subTaskId)) {
-        targetUser.assignedSubtasks.push(subTaskId);
-        await targetUser.save();
-      }
+      await User.findByIdAndUpdate(targetUser._id, {
+        $addToSet: { assignedSubtasks: subTaskId },
+      });
 
       return {
         success: true,
         message: `${picEmail} berhasil ditambahkan sebagai PIC`,
       };
     }
-
     const inviteToken = generateInviteToken();
     const inviteObject = createInviteObject(picEmail, inviteToken, {
       invitedBy: requesterId,
@@ -211,10 +212,9 @@ export async function acceptSubtaskPicInvite(req, res) {
     const validation = validateInviteToken(subtask.pendingPicInvites, token);
     if (!validation.valid) {
       if (validation.expired) {
-        subtask.pendingPicInvites = subtask.pendingPicInvites.filter(
-          (inv) => inv.token !== token
-        );
-        await subtask.save();
+        await Subtask.findByIdAndUpdate(subTaskId, {
+          $pull: { pendingPicInvites: { token: token } },
+        });
       }
       return res.status(validation.expired ? 400 : 404).json({
         success: false,
@@ -223,6 +223,7 @@ export async function acceptSubtaskPicInvite(req, res) {
     }
 
     const invitedEmail = validation.inviteData.email;
+
     const userResult = await findOrCreateUser(invitedEmail, {
       username,
       password,
@@ -239,22 +240,23 @@ export async function acceptSubtaskPicInvite(req, res) {
       });
     }
 
-    const { user } = userResult;
+    const userId = userResult.user._id;
 
-    await addUserToWorkspace(user._id, workspace._id);
+    await Workspace.findByIdAndUpdate(workspace._id, {
+      $addToSet: { members: userId },
+    });
 
-    if (!subtask.pic.includes(user._id)) {
-      subtask.pic.push(user._id);
-    }
-    subtask.pendingPicInvites = subtask.pendingPicInvites.filter(
-      (inv) => inv.token !== token
-    );
-    await subtask.save();
+    await User.findByIdAndUpdate(userId, {
+      $addToSet: {
+        workspaces: workspace._id,
+        assignedSubtasks: subTaskId,
+      },
+    });
 
-    if (!user.assignedSubtasks.includes(subtask._id)) {
-      user.assignedSubtasks.push(subtask._id);
-      await user.save();
-    }
+    await Subtask.findByIdAndUpdate(subTaskId, {
+      $addToSet: { pic: userId },
+      $pull: { pendingPicInvites: { token: token } },
+    });
 
     res.status(200).json({
       success: true,
@@ -262,7 +264,7 @@ export async function acceptSubtaskPicInvite(req, res) {
       data: {
         subtask: subtask.nama,
         workspace: workspace.nama,
-        pic: user.username,
+        pic: userResult.user.username,
       },
     });
   } catch (error) {

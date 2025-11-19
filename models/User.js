@@ -40,15 +40,22 @@ const userSchema = new mongoose.Schema(
       required: [true, "posisi wajib diisi"],
       maxlength: [50, "maksimal 50 karakter"],
     },
-    role: {
-      type: String,
-      enum: ["admin", "member", "head_dev"],
-      default: "member",
+    isSystemAdmin: {
+      type: Boolean,
+      default: false,
     },
     resetOTP: String,
     resetOTPExpire: Date,
-
-    workspaces: [{ type: mongoose.Schema.Types.ObjectId, ref: "Workspace" }],
+    workspaces: [
+      {
+        workspace: { type: mongoose.Schema.Types.ObjectId, ref: "Workspace" },
+        role: {
+          type: String,
+          enum: ["admin", "project_manager", "member", "viewer"],
+          default: "member",
+        },
+      },
+    ],
     assignedTasks: [{ type: mongoose.Schema.Types.ObjectId, ref: "Task" }],
     assignedSubtasks: [
       { type: mongoose.Schema.Types.ObjectId, ref: "Subtask" },

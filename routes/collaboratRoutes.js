@@ -6,14 +6,18 @@ import {
   getCollaborationRequests,
   getWorkspaceProjects,
 } from "../controllers/collaborationController.js";
-import { authenticate, authorize } from "../middleware/auth.js";
+import { authenticate } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.post("/send", sendCollaborationRequest);
-router.get("/", getCollaborationRequests);
-router.put("/:requestId/approve", approveCollaboration);
-router.put("/:requestId/reject", rejectCollaboration);
-router.get("/workspace/:workspaceId/projects", getWorkspaceProjects);
+router.post("/send", authenticate, sendCollaborationRequest);
+router.get("/", authenticate, getCollaborationRequests);
+router.put("/:requestId/approve", authenticate, approveCollaboration);
+router.put("/:requestId/reject", authenticate, rejectCollaboration);
+router.get(
+  "/workspace/:workspaceId/projects",
+  authenticate,
+  getWorkspaceProjects
+);
 
 export default router;

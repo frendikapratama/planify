@@ -7,16 +7,15 @@ import {
   downloadAttachment,
   deleteAttachment,
 } from "../controllers/attachmentController.js";
+import { authenticate } from "../middleware/auth.js";
 const router = express.Router();
 
-// router.use(authMiddleware);
+router.post("/:taskId", authenticate, uploadSingle, addAttachment);
 
-router.post("/:taskId", uploadSingle, addAttachment);
+router.get("/:taskId", authenticate, getTaskAttachments);
 
-router.get("/:taskId", getTaskAttachments);
+router.get("/:taskId/download/:attachmentId", authenticate, downloadAttachment);
 
-router.get("/:taskId/download/:attachmentId", downloadAttachment);
-
-router.delete("/:taskId/delete/:attachmentId", deleteAttachment);
+router.delete("/:taskId/delete/:attachmentId", authenticate, deleteAttachment);
 
 export default router;

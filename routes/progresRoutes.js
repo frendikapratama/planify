@@ -4,11 +4,12 @@ import {
   getProgresByGroup,
   getProgresByWorkspace,
 } from "../controllers/progresController.js";
+import { authenticate } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.get("/project/:projectId", getProgresByProject);
-router.get("/group/:groupId", getProgresByGroup);
-router.get("/workspace/:workspaceId", getProgresByWorkspace);
+router.get("/project/:projectId", authenticate, getProgresByProject);
+router.get("/group/:groupId", authenticate, getProgresByGroup);
+router.get("/workspace/:workspaceId", authenticate, getProgresByWorkspace);
 
 export default router;

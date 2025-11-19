@@ -53,7 +53,15 @@ export async function sendWorkspaceInvitationEmail({
   workspaceName,
   inviteUrl,
   inviterName,
+  role = "member",
 }) {
+  const roleText = {
+    admin: "Admin",
+    project_manager: "Project Manager",
+    member: "Member",
+    viewer: "Viewer",
+  };
+
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to,
@@ -67,6 +75,9 @@ export async function sendWorkspaceInvitationEmail({
         } untuk bergabung ke workspace:</p>
         <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0;">
           <h3 style="margin: 0; color: #1f2937;">${workspaceName}</h3>
+          <p style="margin: 5px 0; color: #6b7280;">Role: <strong>${
+            roleText[role]
+          }</strong></p>
         </div>
         <p>Klik tombol di bawah ini untuk menerima undangan:</p>
         <a href="${inviteUrl}" 

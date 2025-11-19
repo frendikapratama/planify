@@ -1,14 +1,16 @@
 import User from "../models/User.js";
+import Workspace from "../models/Workspace.js";
 import { transporter } from "../utils/sendEmail.js";
 import fs from "fs";
 import { handleError } from "../utils/errorHandler.js";
+
 export async function getUsers(req, res) {
   try {
     const {
       page = 1,
       limit = 10,
       search,
-      role,
+      isSystemAdmin,
       departemen,
       divisi,
     } = req.query;
@@ -17,10 +19,12 @@ export async function getUsers(req, res) {
 
     const filter = {};
 
-    if (role && role !== "all") {
-      filter.role = role;
+    // Filter system admin
+    if (isSystemAdmin && isSystemAdmin !== "all") {
+      filter.isSystemAdmin = isSystemAdmin === "true";
     }
 
+    // Filter departemen & divisi
     if (departemen && departemen !== "all") {
       filter.departemen = departemen;
     }
@@ -28,26 +32,23 @@ export async function getUsers(req, res) {
       filter.divisi = divisi;
     }
 
+    // Search filter
     if (search) {
       const regex = new RegExp(search, "i");
-      filter.$or = [
-        { username: regex },
-        { email: regex },
-        // { departemen: regex },
-        // { divisi: regex },
-      ];
+      filter.$or = [{ username: regex }, { email: regex }, { posisi: regex }];
     }
 
     const users = await User.find(filter)
-      .select("-__v -password")
+      .select("-__v -password -resetOTP -resetOTPExpire")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
     const total = await User.countDocuments(filter);
+
     res.status(200).json({
       success: true,
-      message: "get success",
+      message: "Get users success",
       data: users,
       total,
       page: parseInt(page),
@@ -62,18 +63,43 @@ export async function getUserById(req, res) {
   try {
     const { id } = req.params;
 
-    const user = await User.findById(id);
+    const user = await User.findById(id).select(
+      "-password -resetOTP -resetOTPExpire"
+    );
 
     if (!user) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        message: "user not found",
+        message: "User not found",
       });
     }
 
+    // Get user's workspaces dengan role
+    const userWorkspaces = await Workspace.find({
+      $or: [{ owner: id }, { "members.user": id }],
+    })
+      .select("nama owner members")
+      .populate("owner", "username email");
+
+    const workspacesWithRole = userWorkspaces.map((workspace) => {
+      const workspaceObj = workspace.toObject();
+      if (workspace.owner._id.toString() === id) {
+        workspaceObj.userRole = "owner";
+      } else {
+        const member = workspace.members.find((m) => m.user.toString() === id);
+        workspaceObj.userRole = member?.role || "none";
+      }
+      return workspaceObj;
+    });
+
+    const userData = {
+      ...user.toObject(),
+      workspaces: workspacesWithRole,
+    };
+
     res.status(200).json({
       success: true,
-      data: user,
+      data: userData,
     });
   } catch (error) {
     return handleError(res, error);
@@ -90,8 +116,16 @@ export async function createUser(req, res) {
       departemen,
       divisi,
       posisi,
-      role,
+      isSystemAdmin,
     } = req.body;
+
+    // Validasi required fields
+    if (!username || !email || !password || !noHp || !posisi) {
+      return res.status(400).json({
+        success: false,
+        message: "Username, email, password, noHp, and posisi are required",
+      });
+    }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -109,18 +143,28 @@ export async function createUser(req, res) {
       departemen,
       divisi,
       posisi,
-      role,
+      isSystemAdmin: Boolean(isSystemAdmin),
     });
+
     await user.save();
 
-    res.status(200).json({
+    // Remove sensitive data from response
+    const userResponse = {
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      noHp: user.noHp,
+      departemen: user.departemen,
+      divisi: user.divisi,
+      posisi: user.posisi,
+      isSystemAdmin: user.isSystemAdmin,
+      createdAt: user.createdAt,
+    };
+
+    res.status(201).json({
       success: true,
       message: "User created successfully",
-      data: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-      },
+      data: userResponse,
     });
   } catch (error) {
     return handleError(res, error);
@@ -130,30 +174,49 @@ export async function createUser(req, res) {
 export async function updateUser(req, res) {
   try {
     const { id } = req.params;
+    const currentUserId = req.user._id;
 
     const user = await User.findById(id);
-
     if (!user) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        message: "user not found",
+        message: "User not found",
       });
     }
 
-    const allowed = [
+    // Permission check: hanya system admin atau user sendiri yang bisa update
+    if (!req.user.isSystemAdmin && currentUserId.toString() !== id) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Access denied. Can only update your own profile or need system admin rights",
+      });
+    }
+
+    // Fields yang boleh diupdate
+    const allowedFields = [
       "username",
       "email",
       "noHp",
       "departemen",
       "divisi",
       "posisi",
-      "role",
     ];
-    allowed.forEach((field) => {
-      if (req.body[field]) user[field] = req.body[field];
+
+    // Hanya system admin yang bisa ubah isSystemAdmin
+    if (req.user.isSystemAdmin) {
+      allowedFields.push("isSystemAdmin");
+    }
+
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        user[field] = req.body[field];
+      }
     });
 
+    // Handle photo upload
     if (req.file) {
+      // Delete old photo if exists
       if (user.photo) {
         const oldPath = `uploads/users/${user.photo}`;
         if (fs.existsSync(oldPath)) {
@@ -162,41 +225,90 @@ export async function updateUser(req, res) {
       }
       user.photo = req.file.filename;
     }
+
     await user.save();
+
+    // Remove sensitive data from response
+    const userResponse = {
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      noHp: user.noHp,
+      departemen: user.departemen,
+      divisi: user.divisi,
+      posisi: user.posisi,
+      isSystemAdmin: user.isSystemAdmin,
+      photo: user.photo,
+      updatedAt: user.updatedAt,
+    };
+
     res.status(200).json({
       success: true,
-      data: user,
+      message: "User updated successfully",
+      data: userResponse,
     });
   } catch (error) {
     return handleError(res, error);
   }
 }
 
-export async function deletUser(req, res) {
+export async function deleteUser(req, res) {
   try {
     const { id } = req.params;
+    const currentUserId = req.user._id;
 
-    const user = await User.findById(id);
-
-    if (!user) {
-      return res.status(404).json({
+    // User tidak bisa delete diri sendiri
+    if (id === currentUserId.toString()) {
+      return res.status(400).json({
         success: false,
-        message: "User tidak ditemukan",
+        message: "Cannot delete your own account",
       });
     }
 
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Hanya system admin yang bisa delete user
+    if (!req.user.isSystemAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only system admin can delete users",
+      });
+    }
+
+    // Cek jika user adalah owner workspace
+    const ownedWorkspaces = await Workspace.find({ owner: id });
+    if (ownedWorkspaces.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete user. User is owner of ${ownedWorkspaces.length} workspace(s). Transfer ownership first.`,
+      });
+    }
+
+    // Remove user dari semua workspace members
+    await Workspace.updateMany(
+      { "members.user": id },
+      { $pull: { members: { user: id } } }
+    );
+
+    // Delete photo jika ada
     if (user.photo) {
-      const oldPath = `uploads/users/${user.photo}`;
-      if (fs.existsSync(oldPath)) {
-        fs.unlinkSync(oldPath);
+      const photoPath = `uploads/users/${user.photo}`;
+      if (fs.existsSync(photoPath)) {
+        fs.unlinkSync(photoPath);
       }
     }
 
-    await user.deleteOne();
+    await User.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,
-      message: "user berhasil di hapus",
+      message: "User deleted successfully",
     });
   } catch (error) {
     return handleError(res, error);
@@ -210,25 +322,49 @@ function generateOTP() {
 export async function sendOTP(req, res) {
   try {
     const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
     const user = await User.findOne({ email });
-    if (!user)
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
     const otp = generateOTP();
     user.resetOTP = otp;
-    user.resetOTPExpire = new Date(Date.now() + 5 * 60 * 1000);
+    user.resetOTPExpire = new Date(Date.now() + 5 * 60 * 1000); // 5 menit
     await user.save();
 
     await transporter.sendMail({
-      from: "Support",
+      from: process.env.EMAIL_USER,
       to: email,
       subject: "Reset Password OTP",
-      text: `Kode otp anda adalah ${otp}. dan akan berakhri dalam 5 menit.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2563eb;">Reset Password</h2>
+          <p>Halo ${user.username},</p>
+          <p>Kode OTP untuk reset password Anda adalah:</p>
+          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: center;">
+            <h1 style="margin: 0; color: #1f2937; letter-spacing: 5px;">${otp}</h1>
+          </div>
+          <p>Kode ini akan kadaluarsa dalam 5 menit.</p>
+          <p>Jika Anda tidak meminta reset password, abaikan email ini.</p>
+        </div>
+      `,
     });
 
-    res.json({ success: true, message: "OTP telah di kirim ke email anda" });
+    res.json({
+      success: true,
+      message: "OTP telah dikirim ke email Anda",
+    });
   } catch (error) {
     return handleError(res, error);
   }
@@ -238,21 +374,36 @@ export async function changePassword(req, res) {
   try {
     const { email, otp, newPassword } = req.body;
 
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Email, OTP, and new password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters",
+      });
+    }
+
     const user = await User.findOne({ email });
-    if (!user)
+    if (!user) {
       return res.status(404).json({
         success: false,
-        message: "user not found",
+        message: "User not found",
       });
+    }
 
     if (user.resetOTP !== otp) {
       return res.status(400).json({
         success: false,
-        message: "OTP Invalid",
+        message: "Invalid OTP",
       });
     }
 
-    if (user.resetOTPExpire < Date.now()) {
+    if (!user.resetOTPExpire || user.resetOTPExpire < new Date()) {
       return res.status(400).json({
         success: false,
         message: "OTP expired",
@@ -260,7 +411,6 @@ export async function changePassword(req, res) {
     }
 
     user.password = newPassword;
-
     user.resetOTP = undefined;
     user.resetOTPExpire = undefined;
 
@@ -268,47 +418,76 @@ export async function changePassword(req, res) {
 
     res.json({
       success: true,
-      message: "success change password",
+      message: "Password changed successfully",
     });
   } catch (error) {
     return handleError(res, error);
   }
 }
 
-export async function searchMekanik(req, res) {
+// Get current user profile
+export async function getProfile(req, res) {
   try {
-    const { q } = req.query;
+    const user = await User.findById(req.user._id).select(
+      "-password -resetOTP -resetOTPExpire"
+    );
 
-    let filter = { role: "mekanik" };
-    if (q && q.trim() !== "") {
-      filter.username = { $regex: q, $options: "i" };
-    }
-    const data = await User.find(filter).sort({ createdAt: -1 });
-
-    res.json({
+    res.status(200).json({
       success: true,
-      message: "get succes",
-      data,
+      data: user,
     });
   } catch (error) {
     return handleError(res, error);
   }
 }
 
-export async function searchKasie(req, res) {
+// Update current user profile
+export async function updateProfile(req, res) {
   try {
-    const { q } = req.query;
+    const user = await User.findById(req.user._id);
 
-    let filter = { role: "kasie" };
-    if (q && q.trim() !== "") {
-      filter.username = { $regex: q, $options: "i" };
+    const allowedFields = [
+      "username",
+      "noHp",
+      "departemen",
+      "divisi",
+      "posisi",
+    ];
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        user[field] = req.body[field];
+      }
+    });
+
+    // Handle photo upload
+    if (req.file) {
+      if (user.photo) {
+        const oldPath = `uploads/users/${user.photo}`;
+        if (fs.existsSync(oldPath)) {
+          fs.unlinkSync(oldPath);
+        }
+      }
+      user.photo = req.file.filename;
     }
-    const data = await User.find(filter).sort({ createdAt: -1 });
 
-    res.json({
+    await user.save();
+
+    const userResponse = {
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      noHp: user.noHp,
+      departemen: user.departemen,
+      divisi: user.divisi,
+      posisi: user.posisi,
+      isSystemAdmin: user.isSystemAdmin,
+      photo: user.photo,
+    };
+
+    res.status(200).json({
       success: true,
-      message: "get succes",
-      data,
+      message: "Profile updated successfully",
+      data: userResponse,
     });
   } catch (error) {
     return handleError(res, error);

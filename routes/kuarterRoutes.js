@@ -6,13 +6,14 @@ import {
   deleteKuarter,
   getById,
 } from "../controllers/kuarterController.js";
+import { authenticate, requireSystemAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.get("/", get);
-router.post("/", create);
+router.get("/", authenticate, get);
+router.post("/", authenticate, requireSystemAdmin, create);
 router.get("/:KuarterId", getById);
-router.put("/:KuarterId", edit);
-router.delete("/:KuarterId", deleteKuarter);
+router.put("/:KuarterId", authenticate, edit);
+router.delete("/:KuarterId", authenticate, deleteKuarter);
 
 export default router;

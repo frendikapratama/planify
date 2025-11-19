@@ -1,5 +1,4 @@
 import express from "express";
-
 import {
   createWorkspace,
   getWorkspace,
@@ -8,17 +7,59 @@ import {
   getWorkspaceById,
   inviteMemberByEmail,
   acceptInvite,
+  updateMemberRole,
+  removeMember,
 } from "../controllers/workspaceController.js";
-import { authenticate } from "../middleware/auth.js";
+import { authenticate, checkWorkspaceRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.get("/", getWorkspace);
+router.get("/", authenticate, getWorkspace);
+
 router.post("/:kuarterId", authenticate, createWorkspace);
-router.get("/:workspaceId", getWorkspaceById);
-router.put("/:workspaceId", updateWorkspace);
-router.delete("/:workspaceId", deleteWorkspace);
-router.post("/:workspaceId/invite", authenticate, inviteMemberByEmail);
-router.post("/invite/accept", authenticate, acceptInvite);
+
+router.get(
+  "/:workspaceId",
+  authenticate,
+  checkWorkspaceRole([]),
+  getWorkspaceById
+);
+
+router.put(
+  "/:workspaceId",
+  authenticate,
+  checkWorkspaceRole(["admin", "project_manager"]),
+  updateWorkspace
+);
+
+router.delete(
+  "/:workspaceId",
+  authenticate,
+  checkWorkspaceRole(["admin"]),
+  deleteWorkspace
+);
+
+router.post(
+  "/:workspaceId/invite",
+  authenticate,
+  checkWorkspaceRole(["admin", "project_manager"]),
+  inviteMemberByEmail
+);
+
+router.post("/invite/accept", acceptInvite);
+
+router.put(
+  "/:workspaceId/members/:userId/role",
+  authenticate,
+  checkWorkspaceRole(["admin"]),
+  updateMemberRole
+);
+
+router.delete(
+  "/:workspaceId/members/:userId",
+  authenticate,
+  checkWorkspaceRole(["admin"]),
+  removeMember
+);
 
 export default router;
