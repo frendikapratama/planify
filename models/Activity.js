@@ -22,6 +22,7 @@ const activitySchema = new mongoose.Schema(
         "ASSIGN_USER",
         "REMOVE_USER",
         "COMMENT",
+        "REPLY_COMMENT",
         "UPLOAD_FILE",
         "MOVE_TASK",
       ],
