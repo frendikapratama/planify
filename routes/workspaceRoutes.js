@@ -10,7 +10,11 @@ import {
   updateMemberRole,
   removeMember,
 } from "../controllers/workspaceController.js";
-import { authenticate, checkWorkspaceRole } from "../middleware/auth.js";
+import {
+  authenticate,
+  checkWorkspaceRole,
+  requireSystemAdmin,
+} from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -35,7 +39,7 @@ router.put(
 router.delete(
   "/:workspaceId",
   authenticate,
-  checkWorkspaceRole(["admin"]),
+  requireSystemAdmin,
   deleteWorkspace
 );
 

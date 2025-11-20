@@ -88,7 +88,17 @@ export async function createTask(req, res) {
     await Group.findByIdAndUpdate(groupId, {
       $push: { task: task._id },
     });
-
+    await createActivity({
+      user: req.user._id,
+      workspace: task.workspace,
+      project: group.project,
+      group: groupId,
+      task: task._id,
+      action: "CREATE_TASK",
+      description: `User membuat task ${task.nama}`,
+      before: {},
+      after: { nama: task.nama, groups: groupId },
+    });
     res.status(201).json({
       success: true,
       message: "task created successfully",
@@ -183,7 +193,6 @@ export async function updateTask(req, res) {
         after[key] = newValue;
       }
     }
-
     if (Object.keys(before).length > 0) {
       const group = await Group.findById(updatedTask.groups);
       await createActivity({
@@ -262,6 +271,18 @@ export async function deleteTask(req, res) {
     await Subtask.deleteMany({ task: taskId });
     await Group.findByIdAndUpdate(task.groups, {
       $pull: { task: task._id },
+    });
+    const group = await Group.findById(task.groups);
+    await createActivity({
+      user: req.user._id,
+      workspace: task.workspace,
+      project: group.project,
+      group: task.groups,
+      task: taskId,
+      action: "DELETE_TASK",
+      description: `User menghapus task ${task.nama}`,
+      before: { nama: task.nama, groups: task.groups },
+      after: {},
     });
     res.status(200).json({
       success: true,

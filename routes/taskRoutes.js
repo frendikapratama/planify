@@ -23,7 +23,8 @@ router.get("/", authenticate, getTask);
 router.get("/ByGroup", authenticate, getTasksByGroup);
 router.post(
   "/:groupId",
-  checkWorkspaceRoleFromTask(["admin", "project_manager", "member"]),
+  authenticate,
+  checkWorkspaceRoleFromGroup(["admin", "project_manager", "member"]),
   createTask
 );
 router.put(
@@ -44,12 +45,6 @@ router.delete(
   checkWorkspaceRoleFromTask(["admin", "project_manager"]),
   deleteTask
 );
-router.post(
-  "/:taskId/accept-pic-invite",
-  authenticate,
-  checkWorkspaceRoleFromTask(["admin", "project_manager", "member"]),
-  acceptPicInvite
-);
 router.delete(
   "/:taskId/pic",
   authenticate,
@@ -62,6 +57,7 @@ router.delete(
   checkWorkspaceRoleFromTask(["admin", "project_manager"]),
   removeAllPics
 );
+router.post("/:taskId/accept-pic-invite", acceptPicInvite);
 router.get("/:taskId/verify-invite", verifyPicInvite);
 router.get("/:projectId", getTasksByProjectSimple);
 // Attachment routes
