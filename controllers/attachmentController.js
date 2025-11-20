@@ -1,7 +1,9 @@
 import Task from "../models/Task.js";
+import Group from "../models/Group.js";
 import path from "path";
 import fs from "fs";
 import { handleError } from "../utils/errorHandler.js";
+import { createActivity } from "../helpers/activityhelper.js";
 
 export async function addAttachment(req, res) {
   try {
@@ -33,6 +35,25 @@ export async function addAttachment(req, res) {
         message: "Task not found",
       });
     }
+
+    const group = await Group.findById(task.groups);
+
+    await createActivity({
+      user: req.user._id,
+      workspace: task.workspace,
+      project: group?.project,
+      group: group?._id,
+      task: task._id,
+      action: "UPLOAD_FILE",
+      description: `User uploaded file "${req.file.originalname}" to task ${task.nama}`,
+      before: {},
+      after: {
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        fileType: req.file.mimetype,
+        fileUrl: attachmentData.fileUrl,
+      },
+    });
 
     res.status(201).json({
       success: true,
@@ -68,18 +89,40 @@ export async function deleteAttachment(req, res) {
       });
     }
 
+    const deletedFileData = {
+      fileName: attachment.fileName,
+      fileSize: attachment.fileSize,
+      fileType: attachment.fileType,
+      fileUrl: attachment.fileUrl,
+    };
+
     const filePath = path.join(
       process.cwd(),
       "uploads",
       "attachments",
       path.basename(attachment.fileUrl)
     );
+
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
 
     task.attachments.pull(attachmentId);
     await task.save();
+
+    const group = await Group.findById(task.groups);
+
+    await createActivity({
+      user: req.user._id,
+      workspace: task.workspace,
+      project: group?.project,
+      group: group?._id,
+      task: task._id,
+      action: "DELETE_FILE",
+      description: `User deleted file "${deletedFileData.fileName}" from task ${task.nama}`,
+      before: deletedFileData,
+      after: {},
+    });
 
     res.status(200).json({
       success: true,
@@ -146,6 +189,24 @@ export async function downloadAttachment(req, res) {
         message: "File not found on server",
       });
     }
+
+    const group = await Group.findById(task.groups);
+
+    await createActivity({
+      user: req.user._id,
+      workspace: task.workspace,
+      project: group?.project,
+      group: group?._id,
+      task: task._id,
+      action: "DOWNLOAD_FILE",
+      description: `User downloaded file "${attachment.fileName}" from task ${task.nama}`,
+      before: {},
+      after: {
+        fileName: attachment.fileName,
+        fileSize: attachment.fileSize,
+        fileType: attachment.fileType,
+      },
+    });
 
     res.setHeader("Content-Type", attachment.fileType);
     res.setHeader(

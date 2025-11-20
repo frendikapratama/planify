@@ -24,6 +24,8 @@ const activitySchema = new mongoose.Schema(
         "COMMENT",
         "REPLY_COMMENT",
         "UPLOAD_FILE",
+        "DELETE_FILE",
+        "DOWNLOAD_FILE",
         "MOVE_TASK",
       ],
       required: true,

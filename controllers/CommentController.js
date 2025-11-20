@@ -91,7 +91,7 @@ export async function replyComment(req, res) {
       group: group?._id,
       task: task._id,
       action: "REPLY_COMMENT",
-      description: `User replied to comment on task ${task.nama}`,
+      description: `User replied to comment ${parent.text} on task ${task.nama}`,
       before: {},
       after: {
         text: reply.text,
