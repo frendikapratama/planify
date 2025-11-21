@@ -99,6 +99,7 @@ export async function createTask(req, res) {
       before: {},
       after: { nama: task.nama, groups: groupId },
     });
+
     res.status(201).json({
       success: true,
       message: "task created successfully",
@@ -540,26 +541,44 @@ export async function removePic(req, res) {
       });
     }
 
-    const wasRemoved = task.pic.includes(userId);
+    const wasRemoved = task.pic.some(
+      (id) => id.toString() === userId.toString()
+    );
 
-    if (wasRemoved) {
-      task.pic = task.pic.filter((id) => id.toString() !== userId.toString());
-      await task.save();
-
-      await User.findByIdAndUpdate(userId, {
-        $pull: { assignedTasks: task._id },
-      });
-
-      res.status(200).json({
-        success: true,
-        message: "PIC berhasil dihapus dari task",
-      });
-    } else {
-      res.status(404).json({
+    if (!wasRemoved) {
+      return res.status(404).json({
         success: false,
         message: "User bukan PIC dari task ini",
       });
     }
+
+    const removedUser = await User.findById(userId).select("username email");
+    const picBefore = [...task.pic];
+
+    task.pic = task.pic.filter((id) => id.toString() !== userId.toString());
+    await task.save();
+
+    await User.findByIdAndUpdate(userId, {
+      $pull: { assignedTasks: task._id },
+    });
+
+    const group = await Group.findById(task.groups);
+    await createActivity({
+      user: req.user._id,
+      workspace: task.workspace,
+      project: group.project,
+      group: task.groups,
+      task: taskId,
+      action: "REMOVE_PIC",
+      description: `User menghapus ${removedUser.username} dari PIC task "${task.nama}"`,
+      before: { pic: picBefore },
+      after: { pic: task.pic },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "PIC berhasil dihapus dari task",
+    });
   } catch (error) {
     return handleError(res, error);
   }
