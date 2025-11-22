@@ -55,25 +55,13 @@ export const approveCollaboration = async (req, res) => {
   try {
     const { requestId } = req.params;
 
-    const request = await CollaborationRequest.findById(requestId);
+    // Ambil request dari middleware (sudah divalidasi)
+    const request =
+      req.collaborationRequest ||
+      (await CollaborationRequest.findById(requestId));
+
     if (!request)
       return res.status(404).json({ message: "Request tidak ditemukan" });
-
-    // Verifikasi user adalah member dari workspace tujuan
-    // const workspace = await Workspace.findById(request.toWorkspace);
-    // if (!workspace) {
-    //   return res.status(404).json({ message: "Workspace tidak ditemukan" });
-    // }
-
-    // const isMember =
-    //   workspace.owner.equals(req.user._id) ||
-    //   workspace.members.some((m) => m.equals(req.user._id));
-
-    // if (!isMember) {
-    //   return res.status(403).json({
-    //     message: "Anda tidak memiliki akses ke workspace ini",
-    //   });
-    // }
 
     request.status = "approved";
     await request.save();
@@ -92,24 +80,13 @@ export const rejectCollaboration = async (req, res) => {
   try {
     const { requestId } = req.params;
 
-    const request = await CollaborationRequest.findById(requestId);
+    // Ambil request dari middleware (sudah divalidasi)
+    const request =
+      req.collaborationRequest ||
+      (await CollaborationRequest.findById(requestId));
+
     if (!request)
       return res.status(404).json({ message: "Request tidak ditemukan" });
-
-    const workspace = await Workspace.findById(request.toWorkspace);
-    if (!workspace) {
-      return res.status(404).json({ message: "Workspace tidak ditemukan" });
-    }
-
-    // const isMember =
-    //   workspace.owner.equals(req.user._id) ||
-    //   workspace.members.some((m) => m.equals(req.user._id));
-
-    // if (!isMember) {
-    //   return res.status(403).json({
-    //     message: "Anda tidak memiliki akses ke workspace ini",
-    //   });
-    // }
 
     request.status = "rejected";
     await request.save();

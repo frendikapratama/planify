@@ -218,6 +218,7 @@ export async function updateTask(req, res) {
     return handleError(res, error);
   }
 }
+
 export async function updateTaskPositions(req, res) {
   try {
     const { groupId } = req.params;

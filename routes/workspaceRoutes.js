@@ -20,7 +20,7 @@ const router = express.Router();
 
 router.get("/", authenticate, getWorkspace);
 
-router.post("/:kuarterId", authenticate, createWorkspace);
+router.post("/:kuarterId", authenticate, requireSystemAdmin, createWorkspace);
 
 router.get(
   "/:workspaceId",
