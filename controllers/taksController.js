@@ -690,28 +690,28 @@ export async function getMyTasks(req, res) {
   try {
     const userId = req.user._id;
 
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+    // const startOfToday = new Date();
+    // startOfToday.setHours(0, 0, 0, 0);
 
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+    // const endOfToday = new Date();
+    // endOfToday.setHours(23, 59, 59, 999);
 
     const tasks = await Task.find({
       pic: userId,
-      $or: [
-        {
-          start_date: {
-            $gte: startOfToday,
-            $lte: endOfToday,
-          },
-        },
-        {
-          due_date: {
-            $gte: startOfToday,
-            $lte: endOfToday,
-          },
-        },
-      ],
+      // $or: [
+      //   {
+      //     start_date: {
+      //       $gte: startOfToday,
+      //       $lte: endOfToday,
+      //     },
+      //   },
+      //   {
+      //     due_date: {
+      //       $gte: startOfToday,
+      //       $lte: endOfToday,
+      //     },
+      //   },
+      // ],
     })
       .populate({
         path: "groups",
@@ -767,7 +767,7 @@ export async function getMyTasks(req, res) {
       success: true,
       message: "Berhasil mengambil data My Work hari ini",
       data: {
-        date: new Date().toISOString().split("T")[0],
+        // date: new Date().toISOString().split("T")[0],
         tasks: formattedTasks,
         totalTasks: formattedTasks.length,
       },
