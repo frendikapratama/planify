@@ -167,34 +167,26 @@ export async function getGanttChartByWorkspace(req, res) {
     const projectIds = projects.map((p) => p._id);
     const groups = await Group.find({ project: { $in: projectIds } });
 
-    // Buat data gantt chart untuk setiap project
     const ganttData = await Promise.all(
       projects.map(async (project) => {
-        // Ambil grup yang terkait dengan project ini
         const projectGroupIds = groups
           .filter((g) => g.project.toString() === project._id.toString())
           .map((g) => g._id);
 
-        // Ambil semua task dalam project ini
         const projectTasks = await Task.find({
           groups: { $in: projectGroupIds },
         });
 
-        // Jika tidak ada task, skip project ini
         if (projectTasks.length === 0) {
           return null;
         }
 
-        // Filter task yang memiliki start_date
         const tasksWithStartDate = projectTasks.filter((t) => t.start_date);
 
-        // Filter task yang memiliki due_date
         const tasksWithDueDate = projectTasks.filter((t) => t.due_date);
 
-        // Filter task yang memiliki finish_date
         const tasksWithFinishDate = projectTasks.filter((t) => t.finish_date);
 
-        // Ambil start_date paling awal (pertama)
         const startDate =
           tasksWithStartDate.length > 0
             ? new Date(
@@ -204,7 +196,6 @@ export async function getGanttChartByWorkspace(req, res) {
               )
             : null;
 
-        // Ambil due_date paling akhir (terlama)
         const dueDate =
           tasksWithDueDate.length > 0
             ? new Date(
@@ -212,7 +203,6 @@ export async function getGanttChartByWorkspace(req, res) {
               )
             : null;
 
-        // Ambil finish_date paling akhir (terlama)
         const finishDate =
           tasksWithFinishDate.length > 0
             ? new Date(
@@ -222,7 +212,6 @@ export async function getGanttChartByWorkspace(req, res) {
               )
             : null;
 
-        // Hitung progress
         const totalTask = projectTasks.length;
         const completedTask = projectTasks.filter(
           (t) => t.status === "Done"
@@ -243,7 +232,6 @@ export async function getGanttChartByWorkspace(req, res) {
       })
     );
 
-    // Filter out projects dengan null (tidak ada task)
     const filteredGanttData = ganttData.filter((item) => item !== null);
 
     res.json({
@@ -266,7 +254,6 @@ export async function getGanttChartByProject(req, res) {
       });
     }
 
-    // Ambil project
     const project = await Project.findById(projectId);
 
     if (!project) {
@@ -276,7 +263,6 @@ export async function getGanttChartByProject(req, res) {
       });
     }
 
-    // Ambil semua grup dalam project
     const groups = await Group.find({ project: projectId });
 
     if (groups.length === 0) {
@@ -293,13 +279,10 @@ export async function getGanttChartByProject(req, res) {
       });
     }
 
-    // Buat data gantt chart untuk setiap group
     const ganttData = await Promise.all(
       groups.map(async (group) => {
-        // Ambil semua task dalam group ini
         const groupTasks = await Task.find({ groups: group._id });
 
-        // Jika tidak ada task, kembalikan data kosong
         if (groupTasks.length === 0) {
           return {
             groupId: group._id,
@@ -314,13 +297,10 @@ export async function getGanttChartByProject(req, res) {
           };
         }
 
-        // Filter task yang memiliki start_date
         const tasksWithStartDate = groupTasks.filter((t) => t.start_date);
 
-        // Filter task yang memiliki due_date
         const tasksWithDueDate = groupTasks.filter((t) => t.due_date);
 
-        // Filter task yang memiliki finish_date
         const tasksWithFinishDate = groupTasks.filter((t) => t.finish_date);
 
         // Ambil start_date paling awal

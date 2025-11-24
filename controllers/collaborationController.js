@@ -36,7 +36,7 @@ export const sendCollaborationRequest = async (req, res) => {
       status: "pending",
     });
     if (existing)
-      return res.status(400).json({ message: "Request sudah dikirim" });
+      return res.status(400).json({ message: "Request already been send" });
 
     const request = await CollaborationRequest.create({
       project: projectId,
