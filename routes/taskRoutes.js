@@ -11,6 +11,7 @@ import {
   removeAllPics,
   verifyPicInvite,
   getTasksByProjectSimple,
+  getMyTasks,
 } from "../controllers/taksController.js";
 import {
   authenticate,
@@ -20,6 +21,7 @@ import {
 const router = express.Router();
 
 router.get("/", authenticate, getTask);
+router.get("/my-work", authenticate, getMyTasks);
 router.get("/ByGroup", authenticate, getTasksByGroup);
 router.post(
   "/:groupId",

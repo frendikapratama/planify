@@ -685,3 +685,94 @@ export async function updateMeetingLink(req, res) {
     return handleError(res, error);
   }
 }
+
+export async function getMyTasks(req, res) {
+  try {
+    const userId = req.user._id;
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const tasks = await Task.find({
+      pic: userId,
+      $or: [
+        {
+          start_date: {
+            $gte: startOfToday,
+            $lte: endOfToday,
+          },
+        },
+        {
+          due_date: {
+            $gte: startOfToday,
+            $lte: endOfToday,
+          },
+        },
+      ],
+    })
+      .populate({
+        path: "groups",
+        select: "nama project",
+        populate: {
+          path: "project",
+          select: "nama workspace",
+          populate: {
+            path: "workspace",
+            select: "nama",
+          },
+        },
+      })
+      .populate("pic", "username email")
+      .populate({
+        path: "subtask",
+        options: { sort: { position: 1 } },
+      })
+      .sort({ due_date: 1, position: 1 });
+
+    const formattedTasks = tasks.map((task) => {
+      const group = Array.isArray(task.groups) ? task.groups[0] : task.groups;
+
+      return {
+        _id: task._id,
+        nama: task.nama,
+        status: task.status,
+        priority: task.priority,
+        start_date: task.start_date,
+        due_date: task.due_date,
+        meeting_date: task.meeting_date,
+        finish_date: task.finish_date,
+        note: task.note,
+        meeting_link: task.meeting_link,
+        description: task.description,
+        pic: task.pic,
+        subtask: task.subtask,
+        workspace: group?.project?.workspace?.nama || "-",
+        project: group?.project?.nama || "-",
+        group: group?.nama || "-",
+        groupId: group?._id,
+        projectId: group?.project?._id,
+        workspaceId: group?.project?.workspace?._id,
+        subtaskStats: {
+          total: task.subtask?.length || 0,
+          completed:
+            task.subtask?.filter((st) => st.status === "selesai").length || 0,
+        },
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Berhasil mengambil data My Work hari ini",
+      data: {
+        date: new Date().toISOString().split("T")[0],
+        tasks: formattedTasks,
+        totalTasks: formattedTasks.length,
+      },
+    });
+  } catch (error) {
+    return handleError(res, error);
+  }
+}
