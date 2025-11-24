@@ -609,3 +609,99 @@ export function checkWorkspaceRoleFromGroup(allowedRoles = []) {
     }
   };
 }
+
+export function checkWorkspaceRoleForCollaboration(allowedRoles = []) {
+  return async (req, res, next) => {
+    try {
+      const userId = req.user._id;
+
+      // System Admin Bypass
+      if (req.user.isSystemAdmin === true) {
+        req.userWorkspaceRole = "system_admin";
+        req.isSystemAdmin = true;
+        return next();
+      }
+
+      let targetWorkspaceId;
+
+      if (req.body.fromWorkspaceId) {
+        targetWorkspaceId = req.body.fromWorkspaceId;
+      } else if (req.params.requestId) {
+        const request = await CollaborationRequest.findById(
+          req.params.requestId
+        );
+        if (!request) {
+          return res.status(404).json({
+            success: false,
+            message: "Request tidak ditemukan",
+          });
+        }
+        targetWorkspaceId = request.toWorkspace;
+        req.collaborationRequest = request; // Simpan untuk digunakan di controller
+      }
+      // Untuk getWorkspaceProjects
+      else if (req.params.workspaceId) {
+        targetWorkspaceId = req.params.workspaceId;
+      }
+      // Untuk getCollaborationRequests
+      else if (req.query.workspaceId) {
+        targetWorkspaceId = req.query.workspaceId;
+      }
+
+      if (!targetWorkspaceId) {
+        return res.status(400).json({
+          success: false,
+          message: "Workspace ID tidak ditemukan",
+        });
+      }
+
+      const workspace = await Workspace.findById(targetWorkspaceId);
+      if (!workspace) {
+        return res.status(404).json({
+          success: false,
+          message: "Workspace tidak ditemukan",
+        });
+      }
+
+      // Cek owner
+      if (workspace.owner.toString() === userId.toString()) {
+        req.userWorkspaceRole = "admin";
+        req.workspace = workspace;
+        return next();
+      }
+
+      // Cari role user
+      const member = workspace.members.find(
+        (m) => m.user.toString() === userId.toString()
+      );
+
+      if (!member) {
+        return res.status(403).json({
+          success: false,
+          message: "Anda bukan member workspace ini",
+        });
+      }
+
+      req.userWorkspaceRole = member.role;
+      req.workspace = workspace;
+
+      // Cek role jika ada allowedRoles
+      if (allowedRoles.length > 0 && !allowedRoles.includes(member.role)) {
+        return res.status(403).json({
+          success: false,
+          message: `Hanya ${allowedRoles.join(
+            " atau "
+          )} yang dapat melakukan aksi ini. Role Anda: ${member.role}`,
+        });
+      }
+
+      next();
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Gagal memverifikasi role workspace",
+        error: error.message,
+      });
+    }
+  };
+}

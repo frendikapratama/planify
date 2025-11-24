@@ -11,6 +11,7 @@ import {
 import { findOrCreateUser } from "../utils/userUtils.js";
 import { sendSubtaskPicInvitationEmail } from "../utils/emailUtils.js";
 import Workspace from "../models/Workspace.js";
+import { createActivity } from "../helpers/activityhelper.js";
 
 export async function getSubTask(req, res) {
   try {
@@ -41,6 +42,16 @@ export async function createSubTask(req, res) {
     });
     await Task.findByIdAndUpdate(taskId, {
       $push: { subtask: subtask._id },
+    });
+
+    await createActivity({
+      user: req.user._id,
+      project: task.project,
+      task: task._id,
+      action: "CREATE_SUBTASK",
+      description: `Membuat subtask "${subtask.nama}" pada task "${task.nama}"`,
+      before: {},
+      after: { nama: subtask.nama, task: taskId },
     });
     res.status(201).json({
       success: true,
@@ -100,6 +111,42 @@ export async function updateSubTask(req, res) {
       { new: true }
     ).populate("pic", "username email");
 
+    const before = {};
+    const after = {};
+
+    for (const key in updateData) {
+      const oldValue = oldSubTask[key];
+      const newValue = updateData[key];
+
+      const oldStr = String(oldValue);
+      const newStr = String(newValue);
+
+      if (oldStr !== newStr) {
+        before[key] = oldValue;
+        after[key] = newValue;
+      }
+    }
+
+    if (Object.keys(before).length > 0) {
+      const workspaceResult = await getWorkspaceFromSubtask(subTaskId);
+
+      if (workspaceResult.success) {
+        const { workspace, project, task, group } = workspaceResult;
+
+        await createActivity({
+          user: req.user._id,
+          workspace: workspace._id,
+          project: project._id,
+          group: group._id,
+          task: task._id,
+          action: "UPDATE_SUBTASK",
+          description: `User mengupdate subtask ${updatedSubTask.nama}`,
+          before,
+          after,
+        });
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: "subtask updated successfully",
@@ -109,6 +156,7 @@ export async function updateSubTask(req, res) {
     return handleError(res, error);
   }
 }
+
 async function handleSubtaskPicAssignment(
   subTaskId,
   picEmail,
@@ -138,12 +186,33 @@ async function handleSubtaskPicAssignment(
       };
     }
 
-    if (
-      targetUser &&
-      workspace.members.some(
-        (m) => m._id.toString() === targetUser._id.toString()
-      )
-    ) {
+    if (targetUser) {
+      const isMember = workspace.members.some(
+        (m) => m.user.toString() === targetUser._id.toString() // Bandingkan m.user, bukan m._id
+      );
+
+      // Jika belum member, tambahkan ke workspace
+      if (!isMember) {
+        await Workspace.findByIdAndUpdate(workspace._id, {
+          $push: {
+            members: {
+              user: targetUser._id,
+              role: "member",
+            },
+          },
+        });
+
+        await User.findByIdAndUpdate(targetUser._id, {
+          $push: {
+            workspaces: {
+              workspace: workspace._id,
+              role: "member",
+            },
+          },
+        });
+      }
+
+      // Tambahkan sebagai PIC
       await Subtask.findByIdAndUpdate(subTaskId, {
         $addToSet: { pic: targetUser._id },
       });
@@ -154,9 +223,12 @@ async function handleSubtaskPicAssignment(
 
       return {
         success: true,
-        message: `${picEmail} berhasil ditambahkan sebagai PIC`,
+        message: `${picEmail} berhasil ditambahkan sebagai PIC${
+          !isMember ? " dan bergabung ke workspace sebagai member" : ""
+        }`,
       };
     }
+
     const inviteToken = generateInviteToken();
     const inviteObject = createInviteObject(picEmail, inviteToken, {
       invitedBy: requesterId,
@@ -166,10 +238,7 @@ async function handleSubtaskPicAssignment(
       $push: { pendingPicInvites: inviteObject },
     });
 
-    const isRegistered = !!targetUser;
-    const inviteUrl = `http://localhost:5173/accept-pic-invite?subTaskId=${subTaskId}&token=${inviteToken}${
-      isRegistered ? "&registered=true" : ""
-    }`;
+    const inviteUrl = `${process.env.CLIENT_URL}/accept-pic-invite?subTaskId=${subTaskId}&token=${inviteToken}`;
 
     await sendSubtaskPicInvitationEmail({
       to: picEmail,
@@ -178,21 +247,22 @@ async function handleSubtaskPicAssignment(
       projectName: project.nama,
       workspaceName: workspace.nama,
       inviteUrl,
-      isRegistered,
+      isRegistered: false,
     });
 
     return {
       success: true,
       invited: true,
-      message: `Undangan PIC dikirim ke ${picEmail}. ${
-        isRegistered
-          ? "User akan otomatis join workspace"
-          : "User perlu register terlebih dahulu"
-      }`,
-      needsRegistration: !isRegistered,
+      message: `Undangan PIC dikirim ke ${picEmail}. User perlu register terlebih dahulu dan akan otomatis mendapat role member`,
+      needsRegistration: true,
     };
   } catch (error) {
-    throw error;
+    console.error("Error in handleSubtaskPicAssignment:", error);
+    return {
+      success: false,
+      status: 500,
+      message: "Terjadi kesalahan saat menambahkan PIC",
+    };
   }
 }
 
@@ -292,28 +362,58 @@ export async function removeSubtaskPic(req, res) {
       });
     }
 
-    const wasRemoved = subtask.pic.includes(userId);
+    const wasRemoved = subtask.pic.some(
+      (id) => id.toString() === userId.toString()
+    );
 
-    if (wasRemoved) {
-      subtask.pic = subtask.pic.filter(
-        (id) => id.toString() !== userId.toString()
-      );
-      await subtask.save();
-
-      await User.findByIdAndUpdate(userId, {
-        $pull: { assignedSubtasks: subtask._id },
-      });
-
-      res.status(200).json({
-        success: true,
-        message: "PIC berhasil dihapus dari subtask",
-      });
-    } else {
-      res.status(404).json({
+    if (!wasRemoved) {
+      return res.status(404).json({
         success: false,
         message: "User bukan PIC dari subtask ini",
       });
     }
+
+    const removedUser = await User.findById(userId).select("username email");
+    const picBefore = [...subtask.pic]; // Copy array
+
+    subtask.pic = subtask.pic.filter(
+      (id) => id.toString() !== userId.toString()
+    );
+    await subtask.save();
+
+    await User.findByIdAndUpdate(userId, {
+      $pull: { assignedSubtasks: subtask._id },
+    });
+
+    const workspaceResult = await getWorkspaceFromSubtask(subTaskId);
+    if (workspaceResult.success) {
+      const { workspace, project, task, group } = workspaceResult;
+
+      await createActivity({
+        user: req.user._id,
+        workspace: workspace._id,
+        project: project._id,
+        group: group._id,
+        task: task._id,
+        action: "REMOVE_SUBTASK_PIC",
+        description: `User menghapus ${removedUser.username} dari PIC subtask "${subtask.nama}" pada task "${task.nama}"`,
+        before: { pic: picBefore },
+        after: { pic: subtask.pic },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "PIC berhasil dihapus dari subtask",
+      data: {
+        removedUser: {
+          _id: removedUser._id,
+          username: removedUser.username,
+          email: removedUser.email,
+        },
+        remainingPics: subtask.pic,
+      },
+    });
   } catch (error) {
     return handleError(res, error);
   }
@@ -362,9 +462,11 @@ export async function verifySubtaskPicInvite(req, res) {
     return handleError(res, error);
   }
 }
+
 export async function deleteSubTask(req, res) {
   try {
     const { subTaskId } = req.params;
+    const workspaceResult = await getWorkspaceFromSubtask(subTaskId);
     const subtask = await Subtask.findByIdAndDelete(subTaskId);
     if (!subtask) {
       return res
@@ -374,6 +476,24 @@ export async function deleteSubTask(req, res) {
     await Task.findByIdAndUpdate(subtask.task, {
       $pull: { subtask: subtask._id },
     });
+    if (workspaceResult.success) {
+      const { workspace, project, task, group } = workspaceResult;
+
+      await createActivity({
+        user: req.user._id,
+        workspace: workspace._id,
+        project: project._id,
+        group: group._id,
+        task: task._id,
+        action: "DELETE_SUBTASK",
+        description: `User menghapus subtask "${subtask.nama}" dari task "${task.nama}"`, // ✅ Description yang benar
+        before: {
+          nama: subtask.nama,
+          task: subtask.task,
+        },
+        after: {},
+      });
+    }
     res.status(200).json({
       success: true,
       message: "subtask deleted successfully",
