@@ -22,12 +22,7 @@ router.get("/", authenticate, getWorkspace);
 
 router.post("/:kuarterId", authenticate, requireSystemAdmin, createWorkspace);
 
-router.get(
-  "/:workspaceId",
-  authenticate,
-  checkWorkspaceRole([]),
-  getWorkspaceById
-);
+router.get("/:workspaceId", authenticate, getWorkspaceById);
 
 router.put(
   "/:workspaceId",

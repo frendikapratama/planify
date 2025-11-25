@@ -1,3 +1,4 @@
+// middleware/auth.js - FIXED VERSION
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import Group from "../models/Group.js";
@@ -6,42 +7,39 @@ import Project from "../models/Project.js";
 import Workspace from "../models/Workspace.js";
 import Subtask from "../models/Subtask.js";
 
+// ✅ PERBAIKAN: Konstanta untuk JWT Secret yang konsisten
+const JWT_SECRET =
+  process.env.TOKEN_SECRET ||
+  process.env.JWT_SECRET ||
+  "48db792b7ced19872b7109589afb94bb084acf4b5ef0879ccc5855395cb44a5e";
+
 export async function authenticate(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer")) {
       return res.status(401).json({ message: "Anda Tidak Punya Akses" });
     }
+
     const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(
-      token,
-      process.env.TOKEN_SECRET ||
-        "48db792b7ced19872b7109589afb94bb084acf4b5ef0879ccc5855395cb44a5e"
-    );
+
+    // Gunakan konstanta JWT_SECRET yang sama
+    const decoded = jwt.verify(token, JWT_SECRET);
+
     const user = await User.findById(decoded.id).select("-password");
     if (!user) {
       return res.status(401).json({ message: "User tidak ditemukan" });
     }
+
     req.user = user;
     next();
   } catch (error) {
-    res
-      .status(401)
-      .json({ message: "Autentikasi gagal", error: error.message });
+    console.error("Authentication error:", error.message);
+    res.status(401).json({
+      message: "Autentikasi gagal",
+      error: error.message,
+    });
   }
 }
-
-// export function authorize(...roles) {
-//   return (req, res, next) => {
-//     if (!req.user) {
-//       return res.status(401).json({ message: "User tidak terautentikasi" });
-//     }
-//     if (!roles.includes(req.user.role)) {
-//       return res.status(403).json({ message: "Tidak punya akses" });
-//     }
-//     next();
-//   };
-// }
 
 export function requireSystemAdmin(req, res, next) {
   if (!req.user) {
@@ -517,7 +515,6 @@ export function checkWorkspaceRoleFromGroup(allowedRoles = []) {
       const { groupId } = req.params || req.body;
       const userId = req.user._id;
 
-      // System Admin Bypass
       if (req.user.isSystemAdmin === true) {
         req.userWorkspaceRole = "system_admin";
         req.isSystemAdmin = true;
@@ -565,7 +562,6 @@ export function checkWorkspaceRoleFromGroup(allowedRoles = []) {
 
       const workspace = project.workspace;
 
-      // Cek owner
       if (workspace.owner.toString() === userId.toString()) {
         req.userWorkspaceRole = "admin";
         req.workspace = workspace;
@@ -573,7 +569,6 @@ export function checkWorkspaceRoleFromGroup(allowedRoles = []) {
         return next();
       }
 
-      // Cari role user
       const member = workspace.members.find(
         (m) => m.user.toString() === userId.toString()
       );
@@ -589,7 +584,6 @@ export function checkWorkspaceRoleFromGroup(allowedRoles = []) {
       req.workspace = workspace;
       req.group = group;
 
-      // Cek role
       if (allowedRoles.length > 0 && !allowedRoles.includes(member.role)) {
         return res.status(403).json({
           success: false,
@@ -615,7 +609,6 @@ export function checkWorkspaceRoleForCollaboration(allowedRoles = []) {
     try {
       const userId = req.user._id;
 
-      // System Admin Bypass
       if (req.user.isSystemAdmin === true) {
         req.userWorkspaceRole = "system_admin";
         req.isSystemAdmin = true;
@@ -637,14 +630,10 @@ export function checkWorkspaceRoleForCollaboration(allowedRoles = []) {
           });
         }
         targetWorkspaceId = request.toWorkspace;
-        req.collaborationRequest = request; // Simpan untuk digunakan di controller
-      }
-      // Untuk getWorkspaceProjects
-      else if (req.params.workspaceId) {
+        req.collaborationRequest = request;
+      } else if (req.params.workspaceId) {
         targetWorkspaceId = req.params.workspaceId;
-      }
-      // Untuk getCollaborationRequests
-      else if (req.query.workspaceId) {
+      } else if (req.query.workspaceId) {
         targetWorkspaceId = req.query.workspaceId;
       }
 
@@ -663,14 +652,12 @@ export function checkWorkspaceRoleForCollaboration(allowedRoles = []) {
         });
       }
 
-      // Cek owner
       if (workspace.owner.toString() === userId.toString()) {
         req.userWorkspaceRole = "admin";
         req.workspace = workspace;
         return next();
       }
 
-      // Cari role user
       const member = workspace.members.find(
         (m) => m.user.toString() === userId.toString()
       );
@@ -685,7 +672,6 @@ export function checkWorkspaceRoleForCollaboration(allowedRoles = []) {
       req.userWorkspaceRole = member.role;
       req.workspace = workspace;
 
-      // Cek role jika ada allowedRoles
       if (allowedRoles.length > 0 && !allowedRoles.includes(member.role)) {
         return res.status(403).json({
           success: false,
