@@ -14,7 +14,10 @@ import { handleError } from "../utils/errorHandler.js";
 import Workspace from "../models/Workspace.js";
 import { createActivity } from "../helpers/activityhelper.js";
 
-import { createTaskStatusNotification } from "../helpers/notificationHelper.js";
+import {
+  createTaskStatusNotification,
+  createTaskAssignmentNotification,
+} from "../helpers/notificationHelper.js";
 import { emitNotificationToUser } from "../sockets/socketHandler.js";
 
 export async function getTasksByProjectSimple(req, res) {
@@ -113,6 +116,175 @@ export async function createTask(req, res) {
   }
 }
 
+// export async function updateTask(req, res) {
+//   try {
+//     const { taskId } = req.params;
+//     const { groupId, position, picEmail, ...updateData } = req.body;
+//     let isStatusChanged = false;
+
+//     const oldTask = await Task.findById(taskId).populate("groups").lean();
+//     if (!oldTask) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Task not found",
+//       });
+//     }
+
+//     // Cek perubahan status SEBELUM update
+//     if (updateData.status && updateData.status !== oldTask.status) {
+//       isStatusChanged = true;
+//     }
+
+//     if (picEmail) {
+//       const emails = Array.isArray(picEmail) ? picEmail : [picEmail];
+
+//       for (const email of emails) {
+//         const picResult = await handlePicAssignment(
+//           taskId,
+//           email,
+//           oldTask,
+//           req.user._id
+//         );
+
+//         if (!picResult.success) {
+//           return res.status(picResult.status || 400).json(picResult);
+//         }
+//       }
+
+//       const refreshedTask = await Task.findById(taskId);
+//       updateData.pic = refreshedTask.pic;
+//     }
+
+//     if (groupId && groupId !== String(oldTask.groups)) {
+//       await Group.findByIdAndUpdate(oldTask.groups, {
+//         $pull: { task: oldTask._id },
+//       });
+
+//       await Group.findByIdAndUpdate(groupId, {
+//         $push: { task: oldTask._id },
+//       });
+
+//       if (position !== undefined && position !== null) {
+//         const tasksInNewGroup = await Task.find({ groups: groupId }).sort({
+//           position: 1,
+//         });
+
+//         const updatePromises = tasksInNewGroup
+//           .map((task, idx) => {
+//             if (idx >= position) {
+//               return Task.findByIdAndUpdate(task._id, {
+//                 position: idx + 1,
+//               });
+//             }
+//             return null;
+//           })
+//           .filter(Boolean);
+
+//         await Promise.all(updatePromises);
+//         updateData.position = position;
+//       }
+
+//       updateData.groups = groupId;
+//     }
+
+//     const updatedTask = await Task.findByIdAndUpdate(taskId, updateData, {
+//       new: true,
+//     }).populate("pic", "username email");
+
+//     const before = {};
+//     const after = {};
+
+//     for (const key in updateData) {
+//       const oldValue = oldTask[key];
+//       const newValue = updateData[key];
+
+//       const oldStr = String(oldValue);
+//       const newStr = String(newValue);
+
+//       if (oldStr !== newStr) {
+//         before[key] = oldValue;
+//         after[key] = newValue;
+//       }
+//     }
+
+//     if (Object.keys(before).length > 0) {
+//       const group = await Group.findById(updatedTask.groups);
+//       await createActivity({
+//         user: req.user._id,
+//         workspace: updatedTask.workspace,
+//         project: group.project,
+//         group: updatedTask.groups,
+//         task: taskId,
+//         action: "UPDATE_TASK",
+//         description: `User mengupdate task ${updatedTask.nama}`,
+//         before,
+//         after,
+//       });
+//     }
+//     // Send realtime notifications if status changed
+//     if (isStatusChanged && updatedTask.pic && updatedTask.pic.length > 0) {
+//       try {
+//         const group = await Group.findById(updatedTask.groups).populate({
+//           path: "project",
+//           populate: {
+//             path: "workspace",
+//             select: "nama owner members",
+//           },
+//         });
+
+//         // Ambil semua member workspace (kecuali sender)
+//         const workspace = group.project.workspace;
+//         const recipientIds = workspace.members
+//           .map((member) => member.user)
+//           .filter((userId) => userId.toString() !== req.user._id.toString()); // Skip sender
+
+//         const notifications = await createTaskStatusNotification({
+//           taskId: updatedTask._id,
+//           taskName: updatedTask.nama,
+//           workspaceId: workspace._id,
+//           workspaceName: workspace.nama,
+//           projectId: group.project._id,
+//           projectName: group.project.nama,
+//           senderId: req.user._id,
+//           senderName: req.user.username,
+//           recipients: recipientIds,
+//           oldStatus: oldTask.status,
+//           newStatus: updatedTask.status,
+//         });
+
+//         // Emit notifications via socket
+//         const io = req.app.get("io");
+//         notifications.forEach((notification) => {
+//           emitNotificationToUser(io, notification.recipient, {
+//             _id: notification._id,
+//             type: notification.type,
+//             title: notification.title,
+//             message: notification.message,
+//             metadata: notification.metadata,
+//             task: notification.task,
+//             isRead: notification.isRead,
+//             createdAt: new Date(),
+//           });
+//         });
+
+//         console.log(
+//           `Sent ${notifications.length} status change notifications to all workspace members`
+//         );
+//       } catch (notifError) {
+//         console.error("Error sending notifications:", notifError);
+//       }
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Task updated successfully",
+//       data: updatedTask,
+//     });
+//   } catch (error) {
+//     return handleError(res, error);
+//   }
+// }
+
 export async function updateTask(req, res) {
   try {
     const { taskId } = req.params;
@@ -132,8 +304,10 @@ export async function updateTask(req, res) {
       isStatusChanged = true;
     }
 
+    // ✅ PERBAIKAN: Handle PIC assignment dengan notifikasi
     if (picEmail) {
       const emails = Array.isArray(picEmail) ? picEmail : [picEmail];
+      const io = req.app.get("io"); // ✅ Ambil io instance
 
       for (const email of emails) {
         const picResult = await handlePicAssignment(
@@ -145,6 +319,25 @@ export async function updateTask(req, res) {
 
         if (!picResult.success) {
           return res.status(picResult.status || 400).json(picResult);
+        }
+
+        // ✅ EMIT notifikasi jika PIC berhasil ditambahkan (bukan invited)
+        if (picResult.notification && io) {
+          emitNotificationToUser(io, picResult.notification.recipient, {
+            _id: picResult.notification._id,
+            type: picResult.notification.type,
+            title: picResult.notification.title,
+            message: picResult.notification.message,
+            metadata: picResult.notification.metadata,
+            task: picResult.notification.task,
+            sender: picResult.notification.sender,
+            isRead: false,
+            createdAt: picResult.notification.createdAt,
+          });
+
+          console.log(
+            `Sent PIC assignment notification to user ${picResult.notification.recipient}`
+          );
         }
       }
 
@@ -218,6 +411,7 @@ export async function updateTask(req, res) {
         after,
       });
     }
+
     // Send realtime notifications if status changed
     if (isStatusChanged && updatedTask.pic && updatedTask.pic.length > 0) {
       try {
@@ -229,11 +423,10 @@ export async function updateTask(req, res) {
           },
         });
 
-        // Ambil semua member workspace (kecuali sender)
         const workspace = group.project.workspace;
         const recipientIds = workspace.members
           .map((member) => member.user)
-          .filter((userId) => userId.toString() !== req.user._id.toString()); // Skip sender
+          .filter((userId) => userId.toString() !== req.user._id.toString());
 
         const notifications = await createTaskStatusNotification({
           taskId: updatedTask._id,
@@ -249,7 +442,6 @@ export async function updateTask(req, res) {
           newStatus: updatedTask.status,
         });
 
-        // Emit notifications via socket
         const io = req.app.get("io");
         notifications.forEach((notification) => {
           emitNotificationToUser(io, notification.recipient, {
@@ -387,6 +579,108 @@ export const getTasksByGroup = async (req, res) => {
   }
 };
 
+// async function handlePicAssignment(taskId, picEmail, task, requesterId) {
+//   try {
+//     const result = await getWorkspaceFromTask(taskId);
+//     if (!result.success) {
+//       return result;
+//     }
+
+//     const { workspace, project } = result;
+
+//     const targetUser = await User.findOne({ email: picEmail });
+//     const currentTask = await Task.findById(taskId);
+
+//     if (
+//       currentTask.pic &&
+//       currentTask.pic.some(
+//         (id) => targetUser && id.toString() === targetUser._id.toString()
+//       )
+//     ) {
+//       return {
+//         success: true,
+//         message: "User sudah menjadi PIC task ini",
+//       };
+//     }
+
+//     if (targetUser) {
+//       const isMember = workspace.members.some(
+//         (m) => m.user.toString() === targetUser._id.toString()
+//       );
+
+//       if (!isMember) {
+//         await Workspace.findByIdAndUpdate(workspace._id, {
+//           $push: {
+//             members: {
+//               user: targetUser._id,
+//               role: "member",
+//             },
+//           },
+//         });
+
+//         await User.findByIdAndUpdate(targetUser._id, {
+//           $push: {
+//             workspaces: {
+//               workspace: workspace._id,
+//               role: "member",
+//             },
+//           },
+//         });
+//       }
+
+//       await Task.findByIdAndUpdate(taskId, {
+//         $addToSet: { pic: targetUser._id },
+//       });
+
+//       if (!targetUser.assignedTasks.includes(taskId)) {
+//         targetUser.assignedTasks.push(taskId);
+//         await targetUser.save();
+//       }
+
+//       return {
+//         success: true,
+//         message: `${picEmail} berhasil ditambahkan sebagai PIC${
+//           !isMember ? " dan bergabung ke workspace sebagai member" : ""
+//         }`,
+//       };
+//     }
+
+//     const inviteToken = generateInviteToken();
+//     const inviteObject = createInviteObject(picEmail, inviteToken, {
+//       invitedBy: requesterId,
+//     });
+
+//     await Task.findByIdAndUpdate(taskId, {
+//       $push: { pendingPicInvites: inviteObject },
+//     });
+
+//     const inviteUrl = `${process.env.CLIENT_URL}/accept-pic-invite?taskId=${taskId}&token=${inviteToken}`;
+
+//     await sendTaskPicInvitationEmail({
+//       to: picEmail,
+//       taskName: task.nama,
+//       projectName: project.nama,
+//       workspaceName: workspace.nama,
+//       inviteUrl,
+//       isRegistered: false,
+//     });
+
+//     return {
+//       success: true,
+//       invited: true,
+//       message: `Undangan PIC dikirim ke ${picEmail}. User perlu register terlebih dahulu dan akan otomatis mendapat role member`,
+//       needsRegistration: true,
+//     };
+//   } catch (error) {
+//     console.error("Error in handlePicAssignment:", error);
+//     return {
+//       success: false,
+//       status: 500,
+//       message: "Terjadi kesalahan saat menambahkan PIC",
+//     };
+//   }
+// }
+
 async function handlePicAssignment(taskId, picEmail, task, requesterId) {
   try {
     const result = await getWorkspaceFromTask(taskId);
@@ -445,12 +739,38 @@ async function handlePicAssignment(taskId, picEmail, task, requesterId) {
         await targetUser.save();
       }
 
-      return {
-        success: true,
-        message: `${picEmail} berhasil ditambahkan sebagai PIC${
-          !isMember ? " dan bergabung ke workspace sebagai member" : ""
-        }`,
-      };
+      try {
+        const group = await Group.findById(currentTask.groups);
+        const requester = await User.findById(requesterId);
+
+        const notification = await createTaskAssignmentNotification({
+          taskId: currentTask._id,
+          taskName: currentTask.nama,
+          workspaceId: workspace._id,
+          workspaceName: workspace.nama,
+          projectId: project._id,
+          projectName: project.nama,
+          senderId: requesterId,
+          senderName: requester.username,
+          recipientId: targetUser._id,
+        });
+
+        return {
+          success: true,
+          message: `${picEmail} berhasil ditambahkan sebagai PIC${
+            !isMember ? " dan bergabung ke workspace sebagai member" : ""
+          }`,
+          notification,
+        };
+      } catch (notifError) {
+        console.error("Error sending PIC notification:", notifError);
+        return {
+          success: true,
+          message: `${picEmail} berhasil ditambahkan sebagai PIC${
+            !isMember ? " dan bergabung ke workspace sebagai member" : ""
+          }`,
+        };
+      }
     }
 
     const inviteToken = generateInviteToken();

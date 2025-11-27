@@ -5,8 +5,8 @@ import { createTaskDueSoonNotification } from "../helpers/notificationHelper.js"
 import { emitNotificationToUser } from "../sockets/socketHandler.js";
 
 export function startTaskDueNotificationJob(io) {
-  // Jalankan setiap hari jam 9 pagi
-  cron.schedule("48 8 * * *", async () => {
+  // Jalankan setiap hari  menit - jam
+  cron.schedule("53 10 * * *", async () => {
     try {
       console.log("Running task due date notification check...");
 
@@ -66,7 +66,7 @@ export function startTaskDueNotificationJob(io) {
           // Emit socket notifications
           notifications.forEach((notification) => {
             emitNotificationToUser(io, notification.recipient, {
-              _id: notification._id || new Date().getTime(),
+              _id: notification._id,
               type: notification.type,
               title: notification.title,
               message: notification.message,
