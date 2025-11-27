@@ -101,9 +101,14 @@ export async function createTask(req, res) {
       group: groupId,
       task: task._id,
       action: "CREATE_TASK",
-      description: `User membuat task ${task.nama}`,
+      description: `${req.user.username} membuat task ${task.nama}`,
       before: {},
-      after: { nama: task.nama, groups: groupId },
+      after: {
+        taskId: task._id,
+        taskName: task.nama,
+        nama: task.nama,
+        groups: groupId,
+      },
     });
 
     res.status(201).json({
@@ -304,10 +309,9 @@ export async function updateTask(req, res) {
       isStatusChanged = true;
     }
 
-    // ✅ PERBAIKAN: Handle PIC assignment dengan notifikasi
     if (picEmail) {
       const emails = Array.isArray(picEmail) ? picEmail : [picEmail];
-      const io = req.app.get("io"); // ✅ Ambil io instance
+      const io = req.app.get("io"); //  Ambil io instance
 
       for (const email of emails) {
         const picResult = await handlePicAssignment(
@@ -321,7 +325,7 @@ export async function updateTask(req, res) {
           return res.status(picResult.status || 400).json(picResult);
         }
 
-        // ✅ EMIT notifikasi jika PIC berhasil ditambahkan (bukan invited)
+        //  EMIT notifikasi jika PIC berhasil ditambahkan (bukan invited)
         if (picResult.notification && io) {
           emitNotificationToUser(io, picResult.notification.recipient, {
             _id: picResult.notification._id,
@@ -399,20 +403,25 @@ export async function updateTask(req, res) {
 
     if (Object.keys(before).length > 0) {
       const group = await Group.findById(updatedTask.groups);
+
+      before.taskId = updatedTask._id;
+      before.taskName = updatedTask.nama;
+      after.taskId = updatedTask._id;
+      after.taskName = updatedTask.nama;
       await createActivity({
         user: req.user._id,
+        kuarter: updatedTask.kuarter,
         workspace: updatedTask.workspace,
         project: group.project,
         group: updatedTask.groups,
         task: taskId,
         action: "UPDATE_TASK",
-        description: `User mengupdate task ${updatedTask.nama}`,
+        description: `${req.user.username} mengupdate task ${updatedTask.nama}`,
         before,
         after,
       });
     }
 
-    // Send realtime notifications if status changed
     if (isStatusChanged && updatedTask.pic && updatedTask.pic.length > 0) {
       try {
         const group = await Group.findById(updatedTask.groups).populate({
@@ -537,8 +546,13 @@ export async function deleteTask(req, res) {
       group: task.groups,
       task: taskId,
       action: "DELETE_TASK",
-      description: `User menghapus task ${task.nama}`,
-      before: { nama: task.nama, groups: task.groups },
+      description: `${req.user.username} menghapus task ${task.nama}`,
+      before: {
+        taskId: task._id,
+        taskName: task.nama,
+        nama: task.nama,
+        groups: task.groups,
+      },
       after: {},
     });
     res.status(200).json({
