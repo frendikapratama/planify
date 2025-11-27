@@ -22,6 +22,7 @@ import ganchartRoutes from "./routes/ganchartRoutes.js";
 import memberRoutes from "./routes/memberRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
+import agendaRoutes from "./routes/agendaRoutes.js";
 import cors from "cors";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import { initializeSocket } from "./sockets/socketHandler.js";
@@ -93,6 +94,7 @@ app.use("/api/members", memberRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/agenda", agendaRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
