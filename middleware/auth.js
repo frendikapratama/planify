@@ -1,4 +1,3 @@
-// middleware/auth.js - FIXED VERSION
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import Group from "../models/Group.js";
@@ -7,10 +6,8 @@ import Project from "../models/Project.js";
 import Workspace from "../models/Workspace.js";
 import Subtask from "../models/Subtask.js";
 
-// ✅ PERBAIKAN: Konstanta untuk JWT Secret yang konsisten
 const JWT_SECRET =
   process.env.TOKEN_SECRET ||
-  process.env.JWT_SECRET ||
   "48db792b7ced19872b7109589afb94bb084acf4b5ef0879ccc5855395cb44a5e";
 
 export async function authenticate(req, res, next) {
@@ -22,7 +19,6 @@ export async function authenticate(req, res, next) {
 
     const token = authHeader.split(" ")[1];
 
-    // Gunakan konstanta JWT_SECRET yang sama
     const decoded = jwt.verify(token, JWT_SECRET);
 
     const user = await User.findById(decoded.id).select("-password");

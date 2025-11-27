@@ -23,7 +23,9 @@ import memberRoutes from "./routes/memberRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import cors from "cors";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import { initializeSocket } from "./sockets/socketHandler.js";
+import { startTaskDueNotificationJob } from "./jobs/taskDueNotification.js";
 
 dotenv.config({ debug: true, override: true });
 
@@ -90,6 +92,7 @@ app.use("/api/ganchart", ganchartRoutes);
 app.use("/api/members", memberRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -134,6 +137,6 @@ process.on("SIGTERM", () => {
     process.exit(0);
   });
 });
-
+startTaskDueNotificationJob(io);
 export default app;
 export { io };

@@ -1,4 +1,3 @@
-// socket/socketHandler.js - FIXED VERSION
 import jwt from "jsonwebtoken";
 import Workspace from "../models/Workspace.js";
 import ChatMessage from "../models/Chat.js";
@@ -71,6 +70,8 @@ export const initializeSocket = (io) => {
     userSockets.get(userId).add(socket.id);
     socketUsers.set(socket.id, userId);
 
+    socket.join(`user:${userId}`);
+
     socket.on("join:workspace", async (workspaceId) => {
       try {
         const isMember = await isWorkspaceMember(userId, workspaceId);
@@ -118,7 +119,6 @@ export const initializeSocket = (io) => {
       console.log(`User ${userId} left workspace ${workspaceId}`);
     });
 
-    // 🔧 PERBAIKAN UTAMA: Send message
     socket.on("chat:send", async (data) => {
       try {
         const { workspaceId, message, type = "text", fileUrl, fileName } = data;
@@ -142,8 +142,6 @@ export const initializeSocket = (io) => {
 
         const messageData = chatMessage.toObject();
 
-        // ✅ PERBAIKAN: Kirim ke SEMUA user di workspace (termasuk pengirim)
-        // Gunakan io.to() bukan socket.to() agar pengirim juga dapat konfirmasi
         io.to(`workspace:${workspaceId}`).emit("chat:message", messageData);
 
         console.log(`Message sent in workspace ${workspaceId} by ${userId}`);
@@ -241,6 +239,49 @@ export const initializeSocket = (io) => {
       }
     });
 
+    // ===== NOTIFICATION EVENTS =====
+
+    // Mark notification as read
+    socket.on("notification:read", async ({ notificationId }) => {
+      try {
+        const { markAsRead } = await import("../helpers/notificationHelper.js");
+        const notification = await markAsRead(notificationId, userId);
+
+        if (notification) {
+          socket.emit("notification:marked-read", {
+            notificationId,
+            success: true,
+          });
+        }
+      } catch (error) {
+        console.error("Error marking notification as read:", error);
+        socket.emit("error", {
+          message: "Failed to mark notification as read",
+        });
+      }
+    });
+
+    // Mark all notifications as read
+    socket.on("notification:read-all", async () => {
+      try {
+        const { markAllAsRead, getUnreadCount } = await import(
+          "../helpers/notificationHelper.js"
+        );
+        await markAllAsRead(userId);
+        const unreadCount = await getUnreadCount(userId);
+
+        socket.emit("notification:all-marked-read", {
+          success: true,
+          unreadCount,
+        });
+      } catch (error) {
+        console.error("Error marking all notifications as read:", error);
+        socket.emit("error", {
+          message: "Failed to mark all notifications as read",
+        });
+      }
+    });
+
     socket.on("disconnect", () => {
       console.log(`User disconnected: ${userId} (${socket.id})`);
 
@@ -265,6 +306,11 @@ export const initializeSocket = (io) => {
   });
 
   return io;
+};
+
+// Utility function untuk emit notification ke user tertentu
+export const emitNotificationToUser = (io, userId, notification) => {
+  io.to(`user:${userId}`).emit("notification:new", notification);
 };
 
 export { userSockets, socketUsers, workspaceRooms };

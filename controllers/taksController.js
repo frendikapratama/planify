@@ -14,6 +14,9 @@ import { handleError } from "../utils/errorHandler.js";
 import Workspace from "../models/Workspace.js";
 import { createActivity } from "../helpers/activityhelper.js";
 
+import { createTaskStatusNotification } from "../helpers/notificationHelper.js";
+import { emitNotificationToUser } from "../sockets/socketHandler.js";
+
 export async function getTasksByProjectSimple(req, res) {
   try {
     const { projectId } = req.params;
@@ -114,6 +117,7 @@ export async function updateTask(req, res) {
   try {
     const { taskId } = req.params;
     const { groupId, position, picEmail, ...updateData } = req.body;
+    let isStatusChanged = false;
 
     const oldTask = await Task.findById(taskId).populate("groups").lean();
     if (!oldTask) {
@@ -121,6 +125,11 @@ export async function updateTask(req, res) {
         success: false,
         message: "Task not found",
       });
+    }
+
+    // Cek perubahan status SEBELUM update
+    if (updateData.status && updateData.status !== oldTask.status) {
+      isStatusChanged = true;
     }
 
     if (picEmail) {
@@ -152,7 +161,7 @@ export async function updateTask(req, res) {
         $push: { task: oldTask._id },
       });
 
-      if (position !== undefined) {
+      if (position !== undefined && position !== null) {
         const tasksInNewGroup = await Task.find({ groups: groupId }).sort({
           position: 1,
         });
@@ -171,9 +180,9 @@ export async function updateTask(req, res) {
         await Promise.all(updatePromises);
         updateData.position = position;
       }
-    }
 
-    updateData.groups = groupId || oldTask.groups;
+      updateData.groups = groupId;
+    }
 
     const updatedTask = await Task.findByIdAndUpdate(taskId, updateData, {
       new: true,
@@ -194,6 +203,7 @@ export async function updateTask(req, res) {
         after[key] = newValue;
       }
     }
+
     if (Object.keys(before).length > 0) {
       const group = await Group.findById(updatedTask.groups);
       await createActivity({
@@ -207,6 +217,59 @@ export async function updateTask(req, res) {
         before,
         after,
       });
+    }
+    // Send realtime notifications if status changed
+    if (isStatusChanged && updatedTask.pic && updatedTask.pic.length > 0) {
+      try {
+        const group = await Group.findById(updatedTask.groups).populate({
+          path: "project",
+          populate: {
+            path: "workspace",
+            select: "nama owner members",
+          },
+        });
+
+        // Ambil semua member workspace (kecuali sender)
+        const workspace = group.project.workspace;
+        const recipientIds = workspace.members
+          .map((member) => member.user)
+          .filter((userId) => userId.toString() !== req.user._id.toString()); // Skip sender
+
+        const notifications = await createTaskStatusNotification({
+          taskId: updatedTask._id,
+          taskName: updatedTask.nama,
+          workspaceId: workspace._id,
+          workspaceName: workspace.nama,
+          projectId: group.project._id,
+          projectName: group.project.nama,
+          senderId: req.user._id,
+          senderName: req.user.username,
+          recipients: recipientIds,
+          oldStatus: oldTask.status,
+          newStatus: updatedTask.status,
+        });
+
+        // Emit notifications via socket
+        const io = req.app.get("io");
+        notifications.forEach((notification) => {
+          emitNotificationToUser(io, notification.recipient, {
+            _id: notification._id,
+            type: notification.type,
+            title: notification.title,
+            message: notification.message,
+            metadata: notification.metadata,
+            task: notification.task,
+            isRead: notification.isRead,
+            createdAt: new Date(),
+          });
+        });
+
+        console.log(
+          `Sent ${notifications.length} status change notifications to all workspace members`
+        );
+      } catch (notifError) {
+        console.error("Error sending notifications:", notifError);
+      }
     }
 
     res.status(200).json({
