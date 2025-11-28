@@ -3,10 +3,11 @@ import Task from "../models/Task.js";
 import Group from "../models/Group.js";
 import { createTaskDueSoonNotification } from "../helpers/notificationHelper.js";
 import { emitNotificationToUser } from "../sockets/socketHandler.js";
+import { handleError } from "../utils/errorHandler.js";
 
 export function startTaskDueNotificationJob(io) {
   // Jalankan setiap hari  menit - jam
-  cron.schedule("53 10 * * *", async () => {
+  cron.schedule("34 8 * * *", async () => {
     try {
       console.log("Running task due date notification check...");
 

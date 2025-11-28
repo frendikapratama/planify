@@ -146,3 +146,113 @@ export async function sendSubtaskPicInvitationEmail({
   await transporter.sendMail(mailOptions);
   console.log(`📨 Email undangan PIC subtask terkirim ke: ${to}`);
 }
+
+export async function sendTaskDueSoonEmail({
+  to,
+  taskName,
+  projectName,
+  workspaceName,
+  dueDate,
+  status,
+  daysRemaining,
+}) {
+  let urgencyMessage = "";
+  if (daysRemaining === 1) {
+    urgencyMessage = "besok";
+  } else if (daysRemaining === 7) {
+    urgencyMessage = "dalam 1 minggu";
+  } else {
+    urgencyMessage = `dalam ${daysRemaining} hari`;
+  }
+
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to,
+    subject: `⏰ Reminder: Task "${taskName}" Akan Jatuh Tempo`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #f59e0b;">⏰ Task Akan Jatuh Tempo</h2>
+        <p>Halo,</p>
+        <p>Ini adalah pengingat bahwa task Anda akan segera jatuh tempo:</p>
+        <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #f59e0b;">
+          <h3 style="margin: 0; color: #1f2937;">${taskName}</h3>
+          <p style="margin: 5px 0; color: #6b7280;">Project: ${projectName}</p>
+          <p style="margin: 5px 0; color: #6b7280;">Workspace: ${workspaceName}</p>
+          <p style="margin: 10px 0 5px 0; color: #92400e;"><strong>Jatuh tempo: ${urgencyMessage}</strong></p>
+          <p style="margin: 5px 0; color: #6b7280;">Tanggal: ${new Date(
+            dueDate
+          ).toLocaleDateString("id-ID")}</p>
+          <p style="margin: 5px 0; color: #6b7280;">Status saat ini: <strong>${status}</strong></p>
+        </div>
+        <p>Segera selesaikan task ini sebelum deadline!</p>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+  console.log(`📨 Email reminder task due soon terkirim ke: ${to}`);
+}
+
+export async function sendTaskStatusChangedEmail({
+  to,
+  taskName,
+  projectName,
+  workspaceName,
+  senderName,
+  oldStatus,
+  newStatus,
+}) {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to,
+    subject: `🔄 Status Task "${taskName}" Diupdate`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">🔄 Status Task Diupdate</h2>
+        <p>Halo,</p>
+        <p><strong>${senderName}</strong> telah mengubah status task:</p>
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <h3 style="margin: 0; color: #1f2937;">${taskName}</h3>
+          <p style="margin: 5px 0; color: #6b7280;">Project: ${projectName}</p>
+          <p style="margin: 5px 0; color: #6b7280;">Workspace: ${workspaceName}</p>
+          <div style="margin-top: 10px; padding: 10px; background-color: white; border-radius: 4px;">
+            <p style="margin: 0; color: #6b7280;">Status: <span style="text-decoration: line-through;">${oldStatus}</span> → <strong style="color: #2563eb;">${newStatus}</strong></p>
+          </div>
+        </div>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+  console.log(`📨 Email status change terkirim ke: ${to}`);
+}
+
+export async function sendTaskAssignedEmail({
+  to,
+  taskName,
+  projectName,
+  workspaceName,
+  assignerName,
+}) {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to,
+    subject: `📋 Task Baru Ditugaskan: ${taskName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #10b981;">📋 Task Baru Ditugaskan</h2>
+        <p>Halo,</p>
+        <p><strong>${assignerName}</strong> telah menugaskan Anda pada task:</p>
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <h3 style="margin: 0; color: #1f2937;">${taskName}</h3>
+          <p style="margin: 5px 0; color: #6b7280;">Project: ${projectName}</p>
+          <p style="margin: 5px 0; color: #6b7280;">Workspace: ${workspaceName}</p>
+        </div>
+        <p>Silakan cek aplikasi untuk detail lebih lanjut.</p>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+  console.log(`📨 Email task assignment terkirim ke: ${to}`);
+}
