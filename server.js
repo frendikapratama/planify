@@ -26,7 +26,10 @@ import agendaRoutes from "./routes/agendaRoutes.js";
 import cors from "cors";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import { initializeSocket } from "./sockets/socketHandler.js";
-import { startTaskDueNotificationJob } from "./jobs/taskDueNotification.js";
+import {
+  startTaskDueNotificationJob,
+  startTaskOverdueNotificationJob,
+} from "./jobs/taskDueNotification.js";
 
 dotenv.config({ debug: true, override: true });
 
@@ -140,5 +143,6 @@ process.on("SIGTERM", () => {
   });
 });
 startTaskDueNotificationJob(io);
+startTaskOverdueNotificationJob(io);
 export default app;
 export { io };

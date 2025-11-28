@@ -3,6 +3,7 @@ import {
   sendTaskDueSoonEmail,
   sendTaskStatusChangedEmail,
   sendTaskAssignedEmail,
+  sendTaskOverdueEmail,
 } from "../utils/emailUtils.js";
 import User from "../models/User.js";
 
@@ -433,6 +434,87 @@ export async function markAllAsRead(userId) {
     return result;
   } catch (error) {
     console.error("Error marking all notifications as read:", error);
+    throw error;
+  }
+}
+
+export async function createTaskOverdueNotification({
+  taskId,
+  taskName,
+  workspaceId,
+  workspaceName,
+  projectId,
+  projectName,
+  recipients,
+  dueDate,
+  status,
+  daysOverdue,
+}) {
+  try {
+    console.log(
+      `Creating overdue notifications for ${recipients.length} recipients`
+    );
+
+    const notifications = recipients.map((recipientId) => ({
+      recipient: recipientId,
+      type: "TASK_OVERDUE",
+      title: "Task Terlambat",
+      message: `Task "${taskName}" sudah terlambat ${daysOverdue} hari (deadline: ${new Date(
+        dueDate
+      ).toLocaleDateString("id-ID")}) dan masih berstatus ${status}`,
+      task: taskId,
+      workspace: workspaceId,
+      project: projectId,
+      metadata: {
+        taskName,
+        projectName,
+        workspaceName,
+        dueDate,
+        status,
+        daysOverdue, // PENTING: Pastikan ini ada
+      },
+    }));
+
+    // PERBAIKAN: Simpan notifikasi dan return hasilnya
+    let savedNotifications = [];
+    if (notifications.length > 0) {
+      savedNotifications = await Notification.insertMany(notifications);
+      console.log(
+        `✅ Saved ${savedNotifications.length} overdue notifications to database`
+      );
+
+      // Kirim email tanpa await (fire and forget)
+      User.find({ _id: { $in: recipients } })
+        .select("email")
+        .then((users) => {
+          console.log(`Sending overdue emails to ${users.length} users`);
+          users.forEach((user) => {
+            // GUNAKAN FUNGSI EMAIL YANG BENAR
+            sendTaskOverdueEmail({
+              to: user.email,
+              taskName,
+              projectName,
+              workspaceName,
+              dueDate,
+              status,
+              daysOverdue,
+            }).catch((err) =>
+              console.error(
+                `Failed to send overdue email to ${user.email}:`,
+                err
+              )
+            );
+          });
+        })
+        .catch((err) =>
+          console.error("Error fetching users for overdue email:", err)
+        );
+    }
+
+    // PENTING: Return notifications yang sudah disimpan
+    return savedNotifications;
+  } catch (error) {
+    console.error("Error creating task overdue notification:", error);
     throw error;
   }
 }

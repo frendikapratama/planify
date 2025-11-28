@@ -256,3 +256,40 @@ export async function sendTaskAssignedEmail({
   await transporter.sendMail(mailOptions);
   console.log(`📨 Email task assignment terkirim ke: ${to}`);
 }
+
+export async function sendTaskOverdueEmail({
+  to,
+  taskName,
+  projectName,
+  workspaceName,
+  dueDate,
+  status,
+  daysOverdue,
+}) {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to,
+    subject: `🚨 URGENT: Task "${taskName}" Sudah Terlambat ${daysOverdue} Hari`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #dc2626;">🚨 Task Terlambat!</h2>
+        <p>Halo,</p>
+        <p>Task Anda sudah melewati deadline dan masih belum selesai:</p>
+        <div style="background-color: #fee2e2; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #dc2626;">
+          <h3 style="margin: 0; color: #1f2937;">${taskName}</h3>
+          <p style="margin: 5px 0; color: #6b7280;">Project: ${projectName}</p>
+          <p style="margin: 5px 0; color: #6b7280;">Workspace: ${workspaceName}</p>
+          <p style="margin: 10px 0 5px 0; color: #991b1b;"><strong>⚠️ Terlambat: ${daysOverdue} hari</strong></p>
+          <p style="margin: 5px 0; color: #6b7280;">Deadline: ${new Date(
+            dueDate
+          ).toLocaleDateString("id-ID")}</p>
+          <p style="margin: 5px 0; color: #6b7280;">Status saat ini: <strong>${status}</strong></p>
+        </div>
+        <p style="color: #dc2626; font-weight: bold;">⚠️ Harap segera selesaikan task ini!</p>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+  console.log(`📨 Email overdue task terkirim ke: ${to}`);
+}

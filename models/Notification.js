@@ -21,6 +21,7 @@ const notificationSchema = new mongoose.Schema(
         "TASK_COMMENT",
         "TASK_DUE_SOON",
         "MENTION",
+        "TASK_OVERDUE",
       ],
       required: true,
     },
@@ -50,6 +51,8 @@ const notificationSchema = new mongoose.Schema(
       taskName: String,
       projectName: String,
       workspaceName: String,
+      daysRemaining: Number,
+      daysOverdue: Number,
     },
     isRead: {
       type: Boolean,
@@ -65,7 +68,6 @@ const notificationSchema = new mongoose.Schema(
   }
 );
 
-// Index untuk query yang sering digunakan
 notificationSchema.index({ recipient: 1, isRead: 1, createdAt: -1 });
 
 export default mongoose.model("Notification", notificationSchema);
