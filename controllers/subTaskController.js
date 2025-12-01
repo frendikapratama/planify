@@ -536,7 +536,9 @@ export async function getByTask(req, res) {
         message: "task wajib di setakan",
       });
     }
-    const data = await Subtask.find({ task }).populate("pic", "username email");
+    const data = await Subtask.find({ task })
+      .populate("pic", "username email")
+      .sort({ position: 1 });
 
     res.status(200).json({
       success: true,
