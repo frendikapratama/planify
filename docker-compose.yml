@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:latest
+    container_name: mongo_app
+    environment:
+      - MONGO_INITDB_DATABASE=todolist
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - appnet
+
+  backend:
+    build:
+      context: ./backendtodolistaldo
+    container_name: backend_planify
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backendtodolistaldo/.env
+    depends_on:
+      - mongo
+    networks:
+      - appnet
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: frontend_planify
+    ports:
+      - "5173:80"
+    environment:
+      - VITE_API_URL=http://192.168.111.44:5000
+    depends_on:
+      - backend
+    networks:
+      - appnet
+
+networks:
+  appnet:
+
+volumes:
+  mongo_data:
