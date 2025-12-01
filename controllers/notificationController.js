@@ -20,7 +20,7 @@ export async function getNotifications(req, res) {
       .populate("sender", "username email avatar")
       .populate("task", "nama status")
       .populate("workspace", "nama")
-      .populate("project", "nama")
+      .populate("project", "_id  nama")
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit));

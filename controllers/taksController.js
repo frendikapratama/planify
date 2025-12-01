@@ -247,7 +247,7 @@ export async function updateTask(req, res) {
         group: updatedTask.groups,
         task: taskId,
         action: "UPDATE_TASK",
-        description: `${req.user.username} mengupdate task ${updatedTask.nama}`,
+        description: `${req.user.username} update task`,
         before,
         after,
       });
@@ -377,7 +377,7 @@ export async function deleteTask(req, res) {
       group: task.groups,
       task: taskId,
       action: "DELETE_TASK",
-      description: `${req.user.username} menghapus task ${task.nama}`,
+      description: `${req.user.username} delete task `,
       before: {
         taskId: task._id,
         taskName: task.nama,
